@@ -1,0 +1,186 @@
+import "server-only";
+import { db } from "@/server/db";
+import { PlanType } from "@prisma/client";
+import { revalidateTag } from "next/cache";
+import {
+  BASIC_PLAN,
+  FREE_PLAN,
+  PRO_PLAN,
+  GROWTH_PLAN,
+  PREMIUM_PLAN,
+  toPlanSeed,
+} from "@/constants/data/price";
+
+/**
+ * Syncs workspace and bio gallery limits based on user's subscription plan
+ * Called when subscription is created, upgraded, or downgraded
+ */
+export async function syncUserLimits(userId: string, planType: PlanType) {
+  try {
+    // Get the plan details from database
+    const plan = await db.plan.findFirst({
+      where: { planType },
+      select: {
+        maxWorkspaces: true,
+        maxLinksPerWorkspace: true,
+        maxClicksPerWorkspace: true,
+        maxUsers: true,
+        maxCustomDomains: true,
+        maxGalleries: true,
+        maxLinksPerBio: true,
+        maxTagsPerWorkspace: true,
+        maxUtmTemplates: true,
+      },
+    });
+
+    if (!plan) {
+      // Plans table not seeded yet — fall back to code constants so
+      // workspaces still get sane caps instead of silently keeping stale ones.
+      const fallbackPlans = {
+        free: FREE_PLAN,
+        basic: BASIC_PLAN,
+        pro: PRO_PLAN,
+        growth: GROWTH_PLAN,
+        premium: PREMIUM_PLAN,
+      };
+      const fallback = toPlanSeed(fallbackPlans[planType]);
+      console.error(
+        `[Limits Sync] Plan not found for planType: ${planType} — using code fallback`,
+      );
+      await db.workspace.updateMany({
+        where: { userId },
+        data: {
+          maxLinksLimit: fallback.maxLinksPerWorkspace,
+          maxClicksLimit: fallback.maxClicksPerWorkspace,
+          maxUsers: fallback.maxUsers,
+          maxLinkTags: fallback.maxTagsPerWorkspace,
+          maxUtmTemplates: fallback.maxUtmTemplates,
+        },
+      });
+      await db.bio.updateMany({
+        where: { userId },
+        data: {
+          maxLinksLimit: fallback.maxLinksPerBio,
+          maxClicksLimit: fallback.maxClicksPerWorkspace,
+        },
+      });
+      return { success: true, message: "Limits synced from code fallback" };
+    }
+
+    // Update all workspaces for this user with new limits
+    await db.workspace.updateMany({
+      where: { userId },
+      data: {
+        maxLinksLimit: plan.maxLinksPerWorkspace,
+        maxClicksLimit: plan.maxClicksPerWorkspace,
+        maxUsers: plan.maxUsers,
+        maxLinkTags: plan.maxTagsPerWorkspace,
+        maxUtmTemplates: plan.maxUtmTemplates,
+      },
+    });
+
+    // Update all bio galleries for this user with new limits
+    await db.bio.updateMany({
+      where: { userId },
+      data: {
+        maxLinksLimit: plan.maxLinksPerBio,
+        maxClicksLimit: plan.maxClicksPerWorkspace, // Bio clicks use workspace limit
+      },
+    });
+
+    return { success: true, message: "Limits synced successfully" };
+  } catch (error) {
+    console.error(
+      `[Limits Sync] Error syncing limits for user ${userId}:`,
+      error,
+    );
+    return { success: false, message: "Failed to sync limits" };
+  }
+}
+
+/**
+ * Revalidates all subscription-related caches
+ */
+export async function revalidateSubscriptionCache() {
+  try {
+    await Promise.all([
+      revalidateTag("subscription", "max"),
+      revalidateTag("workspace", "max"),
+      revalidateTag("all-workspaces", "max"),
+      revalidateTag("dbuser", "max"),
+      revalidateTag("bio", "max"),
+    ]);
+    return { success: true };
+  } catch (error) {
+    console.error("[Limits Sync] Error revalidating cache:", error);
+    return { success: false };
+  }
+}
+
+/**
+ * Gets free plan limits (fallback when the plans table is unreachable).
+ */
+export async function getFreePlanLimits() {
+  const freePlan = await db.plan.findFirst({
+    where: { planType: "free" },
+    select: {
+      maxWorkspaces: true,
+      maxLinksPerWorkspace: true,
+      maxClicksPerWorkspace: true,
+      maxUsers: true,
+      maxCustomDomains: true,
+      maxGalleries: true,
+      maxLinksPerBio: true,
+      maxTagsPerWorkspace: true,
+      maxUtmTemplates: true,
+    },
+  });
+
+  return (
+    freePlan || {
+      maxWorkspaces: 1,
+      maxLinksPerWorkspace: 10,
+      maxClicksPerWorkspace: 1000,
+      maxUsers: 1,
+      maxCustomDomains: 1,
+      maxGalleries: 1,
+      maxLinksPerBio: 5,
+      maxTagsPerWorkspace: 5,
+      maxUtmTemplates: 5,
+    }
+  );
+}
+
+/**
+ * Gets default basic plan limits
+ */
+export async function getBasicPlanLimits() {
+  const basicPlan = await db.plan.findFirst({
+    where: { planType: "basic" },
+    select: {
+      maxWorkspaces: true,
+      maxLinksPerWorkspace: true,
+      maxClicksPerWorkspace: true,
+      maxUsers: true,
+      maxCustomDomains: true,
+      maxGalleries: true,
+      maxLinksPerBio: true,
+      maxTagsPerWorkspace: true,
+      maxUtmTemplates: true,
+    },
+  });
+
+  return (
+    basicPlan || {
+      maxWorkspaces: 2,
+      maxLinksPerWorkspace: 20,
+      maxClicksPerWorkspace: 1000,
+      maxUsers: 1,
+      maxCustomDomains: 2,
+      maxGalleries: 1,
+      maxLinksPerBio: 5,
+      maxTagsPerWorkspace: 5,
+      maxUtmTemplates: 5,
+    }
+  );
+}

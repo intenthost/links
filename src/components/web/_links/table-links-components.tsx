@@ -1,0 +1,233 @@
+import { memo, useCallback } from "react";
+import { Link as LinkIcon } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { LoaderCircle } from "@/utils/icons/loader-circle";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import LinkCard from "./link-card";
+import { Link } from "../../../types/link-types";
+
+// Memoized skeleton component
+export const LinkCardSkeleton = memo(() => (
+  <>
+    {Array.from({ length: 3 }, (_, index) => (
+      <div
+        key={index}
+        className="mb-4 flex w-full flex-row items-start space-y-0 rounded-xl border p-[21px] sm:items-center sm:space-x-4"
+      >
+        <div className="hidden rounded-full sm:block">
+          <Skeleton className="size-9 rounded-full" />
+        </div>
+        <div className="min-w-0 flex-1 space-y-[6px]">
+          <div className="flex items-center gap-2 sm:flex-row">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-4 w-4" />
+          </div>
+          <Skeleton className="h-3 w-[60%]" />
+        </div>
+        <div className="flex h-full w-auto items-center justify-end">
+          <Skeleton className="h-6 w-24" />
+          <Skeleton className="ml-2 h-6 w-6" />
+        </div>
+      </div>
+    ))}
+  </>
+));
+
+LinkCardSkeleton.displayName = "LinkCardSkeleton";
+
+export const EmptyState = memo(
+  ({
+    searchQuery,
+    hasTagFilter = false,
+    hasInBioFilter = false,
+  }: {
+    searchQuery: string;
+    hasTagFilter?: boolean;
+    hasInBioFilter?: boolean;
+  }) => {
+    const message =
+      searchQuery || hasTagFilter || hasInBioFilter
+        ? "No links match your search, tag, or bio filters."
+        : "You haven't created any links yet.";
+
+    return (
+      <div
+        className="flex h-full min-h-[65vh] w-full flex-col items-center justify-center rounded-xl border"
+        role="status"
+        aria-live="polite"
+      >
+        <LinkIcon
+          size={50}
+          className="animate-fade-in"
+          strokeWidth={1.1}
+          aria-hidden="true"
+        />
+        <h2 className="mt-2 text-lg font-medium">No links found</h2>
+        <p className="mt-2 max-w-md text-center text-sm text-zinc-500 dark:text-zinc-400">
+          {message}
+        </p>
+      </div>
+    );
+  },
+);
+
+EmptyState.displayName = "EmptyState";
+
+export const ErrorState = memo(
+  ({ error, onRetry }: { error: Error; onRetry: () => void }) => {
+    const errorMessage =
+      error.message ||
+      "There was an error loading your links. Please try again later.";
+
+    return (
+      <div
+        className="flex h-full min-h-[60vh] w-full flex-col items-center justify-center rounded border"
+        role="alert"
+        aria-live="assertive"
+      >
+        <h2 className="mt-2 text-lg font-medium">Error loading links</h2>
+        <p className="mt-2 max-w-md text-center text-sm text-zinc-500 dark:text-zinc-400">
+          {errorMessage}
+        </p>
+        <Button onClick={onRetry} className="mt-4" variant="outline" size="sm">
+          Try Again
+        </Button>
+      </div>
+    );
+  },
+);
+
+ErrorState.displayName = "ErrorState";
+
+const LinkItem = memo(
+  ({
+    link,
+    isSelectModeOn,
+    isSelected,
+    onSelectById,
+  }: {
+    link: Link;
+    isSelectModeOn: boolean;
+    isSelected: boolean;
+    onSelectById: (id: string) => void;
+  }) => {
+    const handleSelect = useCallback(() => {
+      onSelectById(link.id);
+    }, [onSelectById, link.id]);
+
+    return (
+      <div>
+        <LinkCard
+          link={link}
+          isPublic={link.isPublic}
+          isSelectModeOn={isSelectModeOn}
+          isSelected={isSelected}
+          onSelect={handleSelect}
+        />
+      </div>
+    );
+  },
+);
+
+LinkItem.displayName = "LinkItem";
+
+export const LinkList = memo(
+  ({
+    links,
+    isGridLayout,
+    isSelectModeOn,
+    selectedLinks,
+    onSelect,
+  }: {
+    links: Link[];
+    isGridLayout: boolean;
+    isSelectModeOn: boolean;
+    selectedLinks: Set<string>;
+    onSelect: (id: string) => void;
+  }) => {
+    const gridClasses = `mb-24 grid gap-4 ${
+      isGridLayout ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"
+    } `;
+
+    return (
+      <div
+        className={gridClasses}
+        aria-label="Link list"
+        role="grid"
+        aria-rowcount={links.length}
+      >
+        {links.map((link) => (
+          <LinkItem
+            key={link.id}
+            link={link}
+            isSelectModeOn={isSelectModeOn}
+            isSelected={selectedLinks.has(link.id)}
+            onSelectById={onSelect}
+          />
+        ))}
+      </div>
+    );
+  },
+);
+
+LinkList.displayName = "LinkList";
+
+export const BulkOperationDialog = memo(
+  ({
+    isOpen,
+    onClose,
+    operation,
+    selectedCount,
+    onConfirm,
+    isProcessing,
+  }: {
+    isOpen: boolean;
+    onClose: () => void;
+    operation: "delete" | "archive" | null;
+    selectedCount: number;
+    onConfirm: () => void;
+    isProcessing: boolean;
+  }) => {
+    if (!operation) return null;
+
+    const title = `${operation === "delete" ? "Delete" : "Archive"} Links`;
+    const description = `Are you sure you want to ${operation} ${selectedCount} selected ${selectedCount === 1 ? "link" : "links"}?${operation === "delete" ? " This action cannot be undone." : ""}`;
+    const actionText = operation === "delete" ? "Delete" : "Archive";
+
+    return (
+      <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>{title}</DialogTitle>
+            <DialogDescription>{description}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={onClose} disabled={isProcessing}>
+              Cancel
+            </Button>
+            <Button
+              variant={operation === "delete" ? "destructive" : "default"}
+              onClick={onConfirm}
+              disabled={isProcessing}
+            >
+              {isProcessing && (
+                <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              {actionText}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  },
+);
+
+BulkOperationDialog.displayName = "BulkOperationDialog";

@@ -1,0 +1,86 @@
+export const PUBLIC_ROUTES = new Set([
+  "/monitoring",
+  "/app/login",
+  "/login",
+  "/test",
+  "/signup",
+  "/forgot-password",
+  "/reset-password",
+  "/verify-email",
+  "/terms",
+  "/privacy",
+  "/404",
+  "/500",
+  "/not-found",
+  "/onboarding",
+  "/onboarding/welcome",
+  "/onboarding/create-workspace",
+  "/onboarding/plans",
+  "/extension/authorize",
+  "/pricing",
+  "/features",
+  "/alternative",
+  "/docs",
+  "/about",
+  "/contact",
+  "/blogs",
+  "/tools",
+  "/sponsors",
+  "/sentry-example-page",
+]);
+
+export const PUBLIC_PREFIXES = [
+  "/api/",
+  "/api/auth",
+  "/api/public",
+  "/_next",
+  "/static",
+  "/blogs/",
+  "/tools/",
+  "/alternative/",
+  "/features/",
+  "/docs/",
+  "/share/",
+  "/favicon.ico",
+  "/robots.txt",
+  "/sitemap.xml",
+];
+
+export const AUTH_PATHS = new Set([
+  "/login",
+  "/signup",
+  "/forgot-password",
+  "/reset-password",
+  "/app/login",
+  "/app/signup",
+  "/app/forgot-password",
+  "/app/reset-password",
+]);
+
+export const SECURITY_HEADERS = {
+  "X-Frame-Options": "DENY",
+  "X-Content-Type-Options": "nosniff",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+  "X-DNS-Prefetch-Control": "on",
+  "Cross-Origin-Opener-Policy": "same-origin",
+} as const;
+
+export const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN?.trim() ?? "";
+export const IS_PRODUCTION = process.env.NODE_ENV === "production";
+
+export const SUBDOMAINS = {
+  bio: `bio.${ROOT_DOMAIN}`,
+  app: `app.${ROOT_DOMAIN}`,
+  admin: `admin.${ROOT_DOMAIN}`,
+  api: `api.${ROOT_DOMAIN}`,
+  webhook: `webhook.${ROOT_DOMAIN}`,
+} as const;
+
+export const FAST_API_PATTERNS = [
+  /^\/api\/analytics\/track$/,
+  /^\/api\/leads_track$/,
+  /^\/api\/redirect\/[^\/]+$/,
+  /^\/api\/metadata$/,
+  /^\/api\/ai\/link-slug$/,
+];

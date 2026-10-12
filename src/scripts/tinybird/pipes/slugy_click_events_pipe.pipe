@@ -1,0 +1,22 @@
+// to create slugy_click_events_mv
+
+SELECT
+        timestamp,
+        workspace_id,
+        link_id,
+        slug,
+        url,
+        domain,
+        country,
+        city,
+        continent,
+        device,
+        browser,
+        os,
+        referer,
+        utm_source,
+        utm_medium,
+        utm_campaign,
+        utm_term,
+        utm_content
+    FROM slugy_click_events

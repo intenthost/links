@@ -1,0 +1,832 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearchPostgres"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ------------Enums-----------
+
+enum Role {
+  user
+  admin
+}
+
+enum PlanType {
+  free
+  basic
+  pro
+  growth
+  premium
+}
+
+enum Interval {
+  month
+  year
+}
+
+enum SubscriptionStatus {
+  active
+  cancelled
+  inactive
+  pending
+}
+
+enum NotificationType {
+  info
+  warning
+  error
+  success
+}
+
+enum WorkspaceRole {
+  owner
+  admin
+  member
+}
+
+enum ApiKeyPermissionLevel {
+  all
+  read_only
+  restricted
+}
+
+enum ResourcePermission {
+  none
+  read
+  write
+}
+
+enum OnboardingUseCase {
+  sharing_links
+  marketing_campaigns
+  tracking_clicks
+  qr_codes
+  bio_link
+  exploring
+}
+
+// -------------User & Authentication--------------
+
+model User {
+  id              String            @id @default(cuid())
+  name            String
+  email           String            @unique
+  password        String?
+  emailVerified   Boolean
+  image           String?
+  role            Role              @default(user)
+  customerId      String?
+  lifetimeBasicAt DateTime?
+  intendedUse     OnboardingUseCase?
+  banned          Boolean           @default(false)
+  banReason       String?
+  banExpires      DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  
+  // Relations
+  accounts        Account[]
+  sessions        Session[]
+  ownedWorkspaces Workspace[]       @relation("owner")
+  members         Member[]
+  links           Link[]
+  Bio             Bio[]
+  sentInvites     Invitation[]      @relation("SentInvites")
+  Notification    Notification[]
+  Usage           Usage[]
+  subscription    Subscription?
+  createdApiKeys  WorkspaceApiKey[] @relation("CreatedApiKeys")
+
+  @@map("user")
+}
+
+model Session {
+  id                   String   @id @default(cuid())
+  expiresAt            DateTime
+  token                String   @unique
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  impersonatedBy       String?
+  ipAddress            String?
+  userAgent            String?
+  userId               String
+  activeOrganizationId String?
+  
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String    @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime? @default(now())
+  updatedAt  DateTime? @updatedAt
+
+  @@index([identifier, value])
+  @@map("verification")
+}
+
+// ------------Billing & Subscriptions---------------
+
+model Plan {
+  id                    String   @id @default(cuid())
+  name                  String?
+  description           String?
+  monthlyPrice          Float    @default(0)
+  monthlyPriceId        String?
+  yearlyPrice           Float    @default(0)
+  yearlyPriceId         String?
+  yearlyDiscount        Float    @default(0)
+  planType              PlanType @default(basic)
+  currency              String   @default("USD")
+  interval              Interval @default(month)
+  
+  // Limits
+  maxWorkspaces         Int @default(2)
+  maxLinksPerWorkspace  Int @default(20)
+  maxClicksPerWorkspace Int @default(1000)
+  maxGalleries          Int @default(1)
+  maxLinksPerBio        Int @default(5)
+  maxUsers              Int @default(1)
+  maxCustomDomains      Int @default(2)
+  maxTagsPerWorkspace   Int @default(5)
+  maxUtmTemplates       Int @default(5)
+  
+  // Metadata
+  features      Json?
+  buttonLabel   String?
+  isReady       Boolean @default(true)
+  isRecommended Boolean @default(false)
+  
+  // Relations
+  subscriptions       Subscription[]
+  SubscriptionHistory SubscriptionHistory[]
+
+  @@map("plans")
+}
+
+model Subscription {
+  id                String                @id @default(cuid())
+  planId            String
+  priceId           String?
+  referenceId       String                @unique // userId
+  customerId        String?
+  subscriptionId    String?               @unique
+  status            String                @default("active")
+  provider          String                @default("polar")
+  periodStart       DateTime              @default(now())
+  periodEnd         DateTime
+  cancelAtPeriodEnd Boolean               @default(false)
+  seats             Int?
+  billingInterval   Interval              @default(month)
+  billingCycle      Int                   @default(1)
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  canceledAt        DateTime?
+  daysWithService   Int                   @default(1)
+  
+  // Relations
+  plan                Plan                  @relation(fields: [planId], references: [id])
+  user                User                  @relation(fields: [referenceId], references: [id], onDelete: Cascade)
+  SubscriptionHistory SubscriptionHistory[]
+
+  @@index([planId, priceId])
+  @@index([customerId])
+  @@map("subscriptions")
+}
+
+model SubscriptionHistory {
+  id             String             @id @default(cuid())
+  subscriptionId String
+  planId         String
+  status         SubscriptionStatus
+  periodStart    DateTime
+  periodEnd      DateTime
+  createdAt      DateTime           @default(now())
+  
+  // Relations
+  plan         Plan         @relation(fields: [planId], references: [id])
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId])
+  @@index([planId])
+  @@map("subscription_history")
+}
+
+// --------------Workspaces & Teams----------
+
+model Workspace {
+  id             String   @id @default(cuid())
+  userId         String
+  name           String
+  slug           String   @unique
+  logo           String?
+  isDefault      Boolean  @default(true)
+  linksUsage     Int      @default(0)
+  clicksUsage    Int      @default(0)
+  maxLinksLimit  Int      @default(20)
+  maxClicksLimit Int      @default(1000)
+  maxUsers       Int      @default(1)
+  maxLinkTags    Int      @default(5)
+  maxUtmTemplates Int     @default(5)
+  addedUsers     Int      @default(1)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  deletedAt      DateTime?
+
+  // Integrations: when true, only owners/admins may manage integrations.
+  integrationsManagerOnly Boolean @default(false)
+  
+  // Relations
+  creator          User              @relation("owner", fields: [userId], references: [id], onDelete: Cascade)
+  members          Member[]
+  workspaceInvites Invitation[]
+  links            Link[]
+  bios             Bio[]
+  tags             Tag[]
+  utmTemplates     UtmTemplate[]
+  customDomains    CustomDomain[]
+  usages           Usage[]
+  apiKeys          WorkspaceApiKey[]
+  leadCustomers    LeadCustomer[]
+  leadEvents       LeadEvent[]
+  integrations     Integration[]
+  webhookEndpoints WebhookEndpoint[]
+
+  @@index([slug])
+  @@index([userId, isDefault])
+  @@map("workspaces")
+}
+
+model WorkspaceApiKey {
+  id                   String                @id @default(cuid())
+  name                 String
+  key                  String                @unique
+  keyHash              String?               @unique
+  keyHint              String?
+  workspaceId          String
+  createdBy            String
+  permissionLevel      ApiKeyPermissionLevel @default(restricted)
+  linksPermission      ResourcePermission    @default(none)
+  domainsPermission    ResourcePermission    @default(none)
+  workspacesPermission ResourcePermission    @default(none)
+  leadsPermission      ResourcePermission    @default(none)
+  lastUsed             DateTime?
+  expiresAt            DateTime?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  deletedAt            DateTime?
+  
+  // Relations
+  creator   User      @relation("CreatedApiKeys", fields: [createdBy], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("workspace_api_keys")
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  logo      String?
+  metadata  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+  
+  // Relations
+  members     Member[]
+  invitations Invitation[]
+
+  @@map("organizations")
+}
+
+model Member {
+  id             String        @id @default(cuid())
+  workspaceId    String
+  userId         String
+  role           WorkspaceRole @default(member)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  organizationId String?
+  
+  // Relations
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+  @@map("members")
+}
+
+model Invitation {
+  id             String        @id @default(cuid())
+  workspaceId    String
+  inviterId      String
+  email          String
+  role           WorkspaceRole @default(member)
+  status         String        @default("pending")
+  token          String        @unique
+  expiresAt      DateTime
+  invitedAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  deletedAt      DateTime?
+  organizationId String?
+  
+  // Relations
+  inviter      User          @relation("SentInvites", fields: [inviterId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, email])
+  @@map("invitations")
+}
+
+// ----------Links & Analytics------------
+
+model Link {
+  id             String    @id @default(cuid())
+  userId         String?
+  url            String
+  slug           String
+  image          String?
+  title          String?
+  metadesc       String?
+  description    String?
+  workspaceId    String
+  clicks         BigInt    @default(0)
+  lastClicked    DateTime?
+  password       String?
+  expiresAt      DateTime?
+  isArchived     Boolean   @default(false)
+  utm_source     String?
+  utm_medium     String?
+  utm_campaign   String?
+  isPublic       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+  android        String?
+  domain         String    @default("slugy.co")
+  expiredUrl     String?
+  geo            Json?
+  ios            String?
+  utm_content    String?
+  utm_term       String?
+  video          String?
+  expirationUrl  String?
+  conversions    BigInt    @default(0)
+  leads          BigInt    @default(0)
+  publicStats    Boolean   @default(false)
+  trackConversion Boolean  @default(false)
+  customDomainId String?
+  
+  // Relations
+  creator         User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  customDomain    CustomDomain?    @relation(fields: [customDomainId], references: [id], onDelete: Cascade)
+  tags            LinkTag[]
+  analytics       Analytics[]
+  qrCode          QrCode?
+  SharedAnalytics SharedAnalytics?
+  leadCustomers   LeadCustomer[]
+  leadEvents      LeadEvent[]
+  bioLinks        BioLinks[]
+
+  @@unique([slug, domain])
+  @@index([workspaceId])
+  @@index([customDomainId])
+  @@index([workspaceId, domain])
+  @@index([workspaceId, isArchived, createdAt])
+  @@index([workspaceId, createdAt])
+  @@index([workspaceId, clicks])
+  @@index([workspaceId, lastClicked])
+  @@map("links")
+}
+
+model Analytics {
+  id           String   @id @default(cuid())
+  linkId       String
+  clickedAt    DateTime @default(now())
+  country      String?
+  city         String?
+  region       String?
+  continent    String?
+  device       String?
+  browser      String?
+  os           String?
+  referer      String?
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+  clickId      String? @unique
+  trigger      String?
+  utm_campaign String?
+  utm_content  String?
+  utm_medium   String?
+  utm_source   String?
+  utm_term     String?
+  
+  // Relations
+  link Link @relation(fields: [linkId], references: [id], onDelete: Cascade)
+
+  @@index([linkId, clickedAt])
+  @@index([clickedAt])
+  @@map("analytics")
+}
+
+model SharedAnalytics {
+  id            String    @id @default(cuid())
+  linkId        String    @unique
+  publicId      String    @unique
+  isPublic      Boolean   @default(true)
+  allowIndexing Boolean   @default(false)
+  password      String?
+  showLeads     Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+  
+  // Relations
+  link Link @relation(fields: [linkId], references: [id], onDelete: Cascade)
+
+  @@map("shared_analytics")
+}
+
+model QrCode {
+  id            String    @id @default(cuid())
+  linkId        String    @unique
+  imageUrl      String
+  customization String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+  
+  // Relations
+  link Link @relation(fields: [linkId], references: [id], onDelete: Cascade)
+
+  @@map("qr_codes")
+}
+
+// ---------Tags------------
+
+model Tag {
+  id          String    @id @default(cuid())
+  workspaceId String
+  name        String
+  isDefault   Boolean   @default(false)
+  color       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  
+  // Relations
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  links     LinkTag[]
+
+  @@unique([name, workspaceId])
+  @@index([workspaceId])
+  @@map("tags")
+}
+
+model LinkTag {
+  id        String   @id @default(cuid())
+  linkId    String
+  tagId     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  link Link @relation(fields: [linkId], references: [id], onDelete: Cascade)
+  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([linkId, tagId])
+  @@index([tagId])
+  @@map("link_tags")
+}
+
+// ---------UTM Templates------------
+
+model UtmTemplate {
+  id           String    @id @default(cuid())
+  workspaceId  String
+  name         String
+  utm_source   String?
+  utm_medium   String?
+  utm_campaign String?
+  utm_term     String?
+  utm_content  String?
+  referral     String?
+  isDefault    Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  // Relations
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([name, workspaceId])
+  @@index([workspaceId])
+  @@map("utm_templates")
+}
+
+// ---------Custom Domains--------
+
+model CustomDomain {
+  id                         String    @id @default(cuid())
+  workspaceId                String
+  domain                     String    @unique
+  verified                   Boolean   @default(false)
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
+  dnsConfigured              Boolean   @default(false)
+  lastChecked                DateTime?
+  redirectToWww              Boolean   @default(false)
+  sslEnabled                 Boolean   @default(false)
+  sslExpiresAt               DateTime?
+  sslIssuer                  String?
+  verificationToken          String?
+  cloudflareCnameTarget      String?
+  cloudflareCustomHostnameId String?
+  cloudflareSslStatus        String?
+  cloudflareStatus           String?
+  
+  // Relations
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  links     Link[]
+
+  @@index([workspaceId])
+  @@map("custom_domains")
+}
+
+// ---------- Bio Links --------
+
+model Bio {
+  id             String   @id @default(cuid())
+  userId         String
+  workspaceId    String?
+  name           String?
+  username       String   @unique
+  bio            String?
+  logo           String?
+  isDefault      Boolean  @default(true)
+  linksUsage     Int      @default(0)
+  clicksUsage    Int      @default(0)
+  maxLinksLimit  Int      @default(5)
+  maxClicksLimit Int      @default(1000)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  deletedAt      DateTime?
+  theme          String?
+  isPublic       Boolean  @default(false)
+  
+  // Relations
+  creator User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace?     @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  links   BioLinks[]
+  socials BioSocials[]
+  images  BioGalleryImage[]
+
+  @@index([userId, username])
+  @@index([workspaceId])
+  @@map("bios")
+}
+
+model BioLinks {
+  id              String    @id @default(cuid())
+  bioId           String
+  linkId          String?   @unique
+  linkManagedByBio Boolean  @default(false)
+  title           String
+  icon            String?
+  image           String?
+  url             String
+  style           String? // [link card, single feature (aspect-video), grid-2 feature (aspect-video)]
+  clicks          Int       @default(0)
+  isPublic        Boolean   @default(true)
+  position        Int
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+  
+  // Relations
+  bio Bio @relation(fields: [bioId], references: [id], onDelete: Cascade)
+  link Link? @relation(fields: [linkId], references: [id], onDelete: SetNull)
+
+  @@index([bioId])
+  @@map("bio_links")
+}
+
+model BioSocials {
+  id        String    @id @default(cuid())
+  bioId     String
+  platform  String?
+  url       String?
+  isPublic  Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+  
+  // Relations
+  bio Bio @relation(fields: [bioId], references: [id], onDelete: Cascade)
+
+  @@index([bioId])
+  @@map("bio_socials")
+}
+
+model BioGalleryImage {
+  id        String    @id @default(cuid())
+  bioId     String
+  image     String
+  position  Int       @default(0)
+  isPublic  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+  
+  // Relations
+  bio Bio @relation(fields: [bioId], references: [id], onDelete: Cascade)
+
+  @@index([bioId])
+  @@map("bio_gallery_images")
+}
+
+// --------- Notifications & Usage ----------
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  email     String
+  message   String
+  type      NotificationType @default(info)
+  createdAt DateTime         @default(now())
+  readAt    DateTime?
+  deletedAt DateTime?
+  
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("notifications")
+}
+
+model Usage {
+  id            String     @id @default(cuid())
+  userId        String
+  workspaceId   String?
+  linksCreated  Int        @default(0)
+  clicksTracked Int        @default(0)
+  periodStart   DateTime   @default(now())
+  periodEnd     DateTime   @default(now())
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  deletedAt     DateTime?
+  addedUsers    Int        @default(1)
+  isArchived    Boolean    @default(false)
+  
+  // Relations
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([workspaceId])
+  @@index([userId, workspaceId])
+  @@index([deletedAt, createdAt(sort: Desc)])
+  @@map("usages")
+}
+
+// ---------- Lead conversion tracking ----------
+
+model LeadCustomer {
+  id          String   @id @default(cuid())
+  workspaceId String
+  externalId  String
+  email       String?
+  name        String?
+  avatar      String?
+  clickId     String?
+  linkId      String?
+  country     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  link      Link?       @relation(fields: [linkId], references: [id], onDelete: SetNull)
+  events    LeadEvent[]
+
+  @@unique([workspaceId, externalId])
+  @@index([clickId])
+  @@map("lead_customers")
+}
+
+model LeadEvent {
+  id                 String   @id @default(cuid())
+  workspaceId        String
+  linkId             String
+  clickId            String
+  customerExternalId String
+  eventName          String
+  customerEmail      String?
+  customerName       String?
+  saleAmount         Float    @default(0)
+  saleCurrency       String?
+  metadata           Json?
+  createdAt          DateTime @default(now())
+
+  workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  link      Link         @relation(fields: [linkId], references: [id], onDelete: Cascade)
+  customer  LeadCustomer @relation(fields: [workspaceId, customerExternalId], references: [workspaceId, externalId], onDelete: Cascade)
+
+  @@unique([workspaceId, customerExternalId, eventName])
+  @@index([workspaceId, createdAt])
+  @@index([linkId, createdAt])
+  @@index([clickId])
+  @@map("lead_events")
+}
+
+
+model Integration {
+  id          String   @id @default(cuid())
+  workspaceId String
+  provider    String
+  status      String   @default("connected")
+  config      Json?
+  metadata    Json?
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, provider])
+  @@index([workspaceId])
+  @@map("integrations")
+}
+
+model WebhookEndpoint {
+  id          String   @id @default(cuid())
+  workspaceId String
+  url         String
+  secretHash  String?
+  secretHint  String?
+  secretEnc   String?
+  events      String[] @default([])
+  active      Boolean  @default(true)
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace  Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  deliveries WebhookDelivery[]
+
+  @@index([workspaceId])
+  @@map("webhook_endpoints")
+}
+
+model WebhookDelivery {
+  id         String   @id @default(cuid())
+  endpointId String
+  event      String
+  payload    Json
+  status     String   @default("pending")
+  attempts   Int      @default(0)
+  lastError  String?
+  createdAt  DateTime @default(now())
+
+  endpoint WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  @@index([endpointId, createdAt])
+  @@map("webhook_deliveries")
+}

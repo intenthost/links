@@ -1,0 +1,95 @@
+"use server";
+
+import { FREE_PLAN, toPlanSeed } from "@/constants/data/price";
+import { getSubscriptionWithPlan } from "@/lib/subscription/queries";
+import { db } from "@/server/db";
+import { getAuthSession } from "@/lib/auth";
+import { ensureCurrentUsageRecord } from "@/lib/usage/current-usage";
+
+interface WorkspaceData {
+  maxClicksLimit: number;
+  maxLinksLimit: number;
+  maxUsers: number;
+}
+
+interface UsageDetails {
+  clicksTracked: number;
+  linksCreated: number;
+  addedUsers: number;
+  periodStart: Date;
+  periodEnd: Date;
+}
+
+interface UsageData {
+  workspace: WorkspaceData | null;
+  usage: UsageDetails | null;
+}
+
+export async function getUsages({
+  workspaceslug,
+}: {
+  workspaceslug: string;
+}): Promise<UsageData> {
+  try {
+    const authResult = await getAuthSession();
+    if (!authResult.success) {
+      return { workspace: null, usage: null };
+    }
+    const { user } = authResult.session;
+    const userId = user.id;
+
+    const workspace = await db.workspace.findFirst({
+      where: {
+        slug: workspaceslug,
+        deletedAt: null,
+        OR: [
+          { userId },
+          {
+            members: {
+              some: {
+                userId,
+              },
+            },
+          },
+        ],
+      },
+      select: {
+        id: true,
+        userId: true,
+        maxClicksLimit: true,
+        maxLinksLimit: true,
+        maxUsers: true,
+      },
+    });
+
+    if (!workspace) {
+      return { workspace: null, usage: null };
+    }
+
+    // Usage counters are workspace-scoped → key by the owner so every
+    // member sees the same numbers the limit checks enforce.
+    const usage = await ensureCurrentUsageRecord(db, {
+      workspaceId: workspace.id,
+      userId: workspace.userId,
+    });
+
+    const { subscription } = await getSubscriptionWithPlan(workspace.userId);
+    const plan = subscription?.plan ?? toPlanSeed(FREE_PLAN);
+    return {
+      workspace: {
+        ...workspace,
+        maxClicksLimit: plan.maxClicksPerWorkspace,
+        maxLinksLimit: plan.maxLinksPerWorkspace,
+        maxUsers: plan.maxUsers,
+      },
+      usage,
+    };
+  } catch (error) {
+    console.error("Failed to fetch usage data:", {
+      workspaceslug,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+
+    return { workspace: null, usage: null };
+  }
+}

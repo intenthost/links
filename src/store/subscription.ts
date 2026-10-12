@@ -1,0 +1,133 @@
+import { create } from "zustand";
+
+type PlanType = "basic" | "pro" | string;
+
+interface SubscriptionPlan {
+  id?: string;
+  name?: string | null;
+  planType?: PlanType | null;
+}
+
+interface ActiveSubscription {
+  id?: string;
+  priceId?: string | null;
+  customerId?: string | null;
+  provider?: string | null;
+  status?: string;
+  periodStart?: string | Date;
+  periodEnd?: string | Date;
+  plan?: SubscriptionPlan | null;
+}
+
+interface SubscriptionStoreState {
+  subscription: ActiveSubscription | null;
+  planType: PlanType | null;
+  isPro: boolean;
+  isGrowth: boolean;
+  isLoading: boolean;
+  error: string | null;
+  hasFetched: boolean;
+  fetchSubscription: () => Promise<void>;
+  resetSubscription: () => void;
+}
+
+function applySubscription(
+  set: (partial: Partial<SubscriptionStoreState>) => void,
+  subscription: ActiveSubscription | null,
+) {
+  const planType =
+    (subscription?.plan?.planType as PlanType | undefined) ?? null;
+  // These flags represent feature access: Premium includes Growth and Pro.
+  const normalized = planType?.toString().toLowerCase();
+  const isPro =
+    normalized === "pro" || normalized === "growth" || normalized === "premium";
+  const isGrowth = normalized === "growth" || normalized === "premium";
+
+  set({
+    subscription,
+    planType,
+    isPro,
+    isGrowth,
+    hasFetched: true,
+    isLoading: false,
+    error: null,
+  });
+}
+
+export const useSubscriptionStore = create<SubscriptionStoreState>(
+  (set, get) => {
+    let inFlight: Promise<void> | null = null;
+    return {
+      subscription: null,
+      planType: null,
+      isPro: false,
+      isGrowth: false,
+      isLoading: false,
+      error: null,
+      hasFetched: false,
+
+      resetSubscription() {
+        set({
+          subscription: null,
+          planType: null,
+          isPro: false,
+          isGrowth: false,
+          isLoading: false,
+          error: null,
+          hasFetched: false,
+        });
+      },
+
+      async fetchSubscription() {
+        const { hasFetched, isLoading } = get();
+        if (hasFetched) return;
+        if (inFlight) return inFlight;
+        if (isLoading) return;
+
+        set({ isLoading: true, error: null });
+
+        inFlight = (async () => {
+          try {
+            const checkoutId =
+              typeof window === "undefined"
+                ? null
+                : new URLSearchParams(window.location.search).get("checkoutId");
+            const subscriptionUrl = checkoutId
+              ? `/api/subscription/active?checkoutId=${encodeURIComponent(checkoutId)}`
+              : "/api/subscription/active";
+
+            const res = await fetch(subscriptionUrl, {
+              credentials: "include",
+              cache: "no-store",
+            });
+
+            if (!res.ok) {
+              throw new Error("Failed to load subscription");
+            }
+
+            const data = (await res.json()) as {
+              subscription?: ActiveSubscription | null;
+            };
+
+            applySubscription(set, data.subscription ?? null);
+          } catch {
+            // Do not default to "basic": the upgrade popup treats that as unpaid.
+            set({
+              subscription: null,
+              planType: null,
+              isPro: false,
+              isGrowth: false,
+              hasFetched: true,
+              isLoading: false,
+              error: "Failed to load subscription",
+            });
+          } finally {
+            inFlight = null;
+          }
+        })();
+
+        return inFlight;
+      },
+    };
+  },
+);

@@ -1,0 +1,373 @@
+"use server";
+import { z } from "zod";
+import { parseWorkspaceSlug } from "@/lib/workspace-cookie";
+import { requireSelf } from "@/lib/require-self";
+
+import { getAuthSession } from "@/lib/auth";
+import { db } from "@/server/db";
+import { checkWorkspaceLimit } from "@/server/actions/limit";
+import { waitUntil } from "@vercel/functions";
+import { calculateUsagePeriod } from "@/lib/usage-period";
+import { revalidateTag, revalidatePath } from "next/cache";
+import { Prisma } from "@prisma/client";
+import {
+  getDefaultWorkspaceCache,
+  setDefaultWorkspaceCache,
+  getAllWorkspacesCache,
+  setAllWorkspacesCache,
+  getWorkspaceValidationCache,
+  setWorkspaceValidationCache,
+  invalidateWorkspaceCache,
+} from "@/lib/cache-utils/workspace-cache";
+import { sendWorkspaceWelcomeEmail } from "@/server/actions/email";
+import { ensureFreeSubscription } from "@/lib/subscription/free-entitlement";
+
+// Revalidate all workspace-related cache tags
+async function revalidateWorkspaceTags() {
+  await Promise.all([
+    revalidateTag("workspaces", "max"),
+    revalidateTag("all-workspaces", "max"),
+    revalidateTag("workspace", "max"),
+    revalidateTag("workspace-validation", "max"),
+  ]);
+}
+
+export async function createWorkspace({
+  name,
+  slug,
+  logo,
+  isDefault = false,
+}: {
+  name: string;
+  slug: string;
+  logo?: string;
+  isDefault?: boolean;
+}) {
+  try {
+    const authResult = await getAuthSession();
+    if (!authResult.success) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const validated = z
+      .object({
+        name: z.string().trim().min(3).max(30),
+        slug: z
+          .string()
+          .min(1)
+          .max(30)
+          .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+          .refine((value) => parseWorkspaceSlug(value) === value),
+        logo: z.string().url().optional(),
+        isDefault: z.boolean(),
+      })
+      .safeParse({ name, slug, logo, isDefault });
+    if (!validated.success)
+      return { success: false, error: "Invalid workspace details" };
+    name = validated.data.name;
+    const userId = authResult.session.user.id;
+
+    // Check workspace limits before creating
+    const limitCheck = await checkWorkspaceLimit(userId);
+    if (!limitCheck.canCreate) {
+      return {
+        success: false,
+        error: limitCheck.message,
+        limitInfo: {
+          currentCount: limitCheck.currentCount,
+          maxLimit: limitCheck.maxLimit,
+          planType: limitCheck.planType,
+        },
+      };
+    }
+
+    const workspace = await db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "user" WHERE id = ${userId} FOR UPDATE`;
+      const count = await tx.workspace.count({
+        where: { userId, deletedAt: null },
+      });
+      if (count >= limitCheck.maxLimit)
+        throw new Error("Workspace limit reached");
+      if (isDefault) {
+        await tx.workspace.updateMany({
+          where: { userId, isDefault: true },
+          data: { isDefault: false },
+        });
+      }
+
+      const created = await tx.workspace.create({
+        data: { userId, name, slug, logo, isDefault },
+        select: { id: true, name: true, slug: true },
+      });
+
+      // Owner membership + first usage period are part of creation, not
+      // background work — a dropped waitUntil previously left workspaces with
+      // no owner row (team counts off-by-one) and no usage row.
+      await tx.member.create({
+        data: { userId, workspaceId: created.id, role: "owner" },
+      });
+
+      const { periodStart, periodEnd } = calculateUsagePeriod(null, new Date());
+      await tx.usage.create({
+        data: {
+          userId,
+          workspaceId: created.id,
+          linksCreated: 0,
+          clicksTracked: 0,
+          addedUsers: 1,
+          periodStart,
+          periodEnd,
+        },
+      });
+
+      return created;
+    });
+
+    // Revalidate caches
+    await Promise.all([
+      invalidateWorkspaceCache(userId),
+      revalidateWorkspaceTags(),
+    ]);
+    revalidatePath(`/${workspace.slug}`);
+
+    // Guarantee a subscription exists before the plans step: brand-new
+    // users get Free here so "Continue with Free" can never fail on a
+    // missing plan row. Non-fatal — limit checks self-heal anyway.
+    try {
+      await ensureFreeSubscription(userId);
+    } catch (error) {
+      console.error("[workspace] Failed to ensure free subscription:", error);
+    }
+
+    // Welcome email via Resend (same path as verify / magic-link).
+    // Awaited so it is not dropped by waitUntil / Inngest sync issues.
+    // Failures are logged and do not fail workspace creation.
+    const email = authResult.session.user.email;
+    if (email) {
+      try {
+        await sendWorkspaceWelcomeEmail({
+          to: email,
+          name: authResult.session.user.name,
+          workspaceName: workspace.name,
+          workspaceSlug: workspace.slug,
+        });
+      } catch (error) {
+        console.error("[workspace] Failed to send welcome email:", error);
+      }
+    }
+
+    return { success: true, slug: workspace.slug };
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return {
+        success: false,
+        error: "Workspace slug already exists!",
+        slugExists: true,
+      };
+    }
+
+    console.error("Error creating workspace:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
+export async function getDefaultWorkspace(userId: string) {
+  try {
+    await requireSelf(userId);
+    const cachedWorkspace = await getDefaultWorkspaceCache(userId);
+    if (cachedWorkspace) {
+      return {
+        success: true,
+        workspace: cachedWorkspace,
+        fromCache: true,
+      };
+    }
+
+    const workspace = await db.workspace.findFirst({
+      where: { userId, isDefault: true, deletedAt: null },
+      select: { id: true, name: true, slug: true, logo: true },
+    });
+
+    waitUntil(setDefaultWorkspaceCache(userId, workspace));
+
+    return {
+      success: !!workspace,
+      workspace,
+      fromCache: false,
+    };
+  } catch (error) {
+    console.error("Error getting default workspace:", error);
+    return {
+      success: false,
+      workspace: null,
+      fromCache: false,
+    };
+  }
+}
+
+/**
+ * First workspace the user can land in: owned default → oldest owned →
+ * oldest member workspace. Used by `/` and middleware so invited-only users
+ * (no owned workspace) don't bounce to onboarding forever.
+ */
+export async function getRedirectWorkspace(userId: string) {
+  try {
+    await requireSelf(userId);
+    const workspace = await db.workspace.findFirst({
+      where: {
+        deletedAt: null,
+        OR: [{ userId }, { members: { some: { userId } } }],
+      },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        logo: true,
+        userId: true,
+        isDefault: true,
+      },
+      orderBy: { createdAt: "asc" },
+    });
+
+    if (!workspace) {
+      return { success: false, workspace: null };
+    }
+
+    // Prefer the owned default when one exists.
+    if (!workspace.isDefault || workspace.userId !== userId) {
+      const ownedDefault = await db.workspace.findFirst({
+        where: { userId, isDefault: true, deletedAt: null },
+        select: { id: true, name: true, slug: true, logo: true },
+      });
+      if (ownedDefault) {
+        return { success: true, workspace: ownedDefault };
+      }
+    }
+
+    const {
+      userId: _owner,
+      isDefault: _isDefault,
+      ...redirectWorkspace
+    } = workspace;
+    return { success: true, workspace: redirectWorkspace };
+  } catch (error) {
+    console.error("Error getting redirect workspace:", error);
+    return { success: false, workspace: null };
+  }
+}
+
+export async function fetchAllWorkspaces(userId: string) {
+  try {
+    await requireSelf(userId);
+    const cachedWorkspaces = await getAllWorkspacesCache(userId);
+    if (cachedWorkspaces) {
+      return { success: true, workspaces: cachedWorkspaces };
+    }
+
+    const workspaces = await db.workspace.findMany({
+      where: {
+        deletedAt: null,
+        OR: [{ userId }, { members: { some: { userId } } }],
+      },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        userId: true,
+        logo: true,
+        members: {
+          where: { userId },
+          select: { role: true },
+          take: 1,
+        },
+      },
+      orderBy: { createdAt: "asc" },
+    });
+
+    const workspacesWithRoles = workspaces.map((workspace) => {
+      const isOwner = workspace.userId === userId;
+      const memberRole = workspace.members[0]?.role;
+
+      return {
+        id: workspace.id,
+        name: workspace.name,
+        slug: workspace.slug,
+        logo: workspace.logo,
+        userRole: isOwner ? "owner" : (memberRole ?? null),
+      };
+    });
+
+    await setAllWorkspacesCache(userId, workspacesWithRoles);
+
+    return { success: true, workspaces: workspacesWithRoles };
+  } catch (error) {
+    console.error("Error fetching workspaces:", error);
+    return { success: false, workspaces: [] };
+  }
+}
+
+export async function validateWorkspaceSlug(userId: string, slug: string) {
+  try {
+    await requireSelf(userId);
+    const cachedWorkspaceResult = await getWorkspaceValidationCache(
+      userId,
+      slug,
+    );
+    if (cachedWorkspaceResult.hasValue) {
+      return {
+        success: !!cachedWorkspaceResult.workspace,
+        workspace: cachedWorkspaceResult.workspace,
+      };
+    }
+
+    // Try to find workspace where user is owner or member
+    const workspace = await db.workspace.findFirst({
+      where: {
+        slug,
+        deletedAt: null,
+        OR: [{ userId }, { members: { some: { userId } } }],
+      },
+      select: { id: true, name: true, slug: true, logo: true },
+    });
+
+    await setWorkspaceValidationCache(userId, slug, workspace ?? null);
+
+    return {
+      success: !!workspace,
+      workspace: workspace ?? null,
+    };
+  } catch (error) {
+    console.error("Error validating workspace slug:", error);
+    return { success: false, workspace: null };
+  }
+}
+
+export async function getWorkspaceLogo(workspaceslug: string) {
+  try {
+    const authResult = await getAuthSession();
+    if (!authResult.success) {
+      return { success: false, logo: null as string | null };
+    }
+
+    const userId = authResult.session.user.id;
+
+    const workspace = await db.workspace.findFirst({
+      where: {
+        slug: workspaceslug,
+        OR: [{ userId }, { members: { some: { userId } } }],
+      },
+      select: { logo: true },
+    });
+
+    return { success: true, logo: workspace?.logo ?? null };
+  } catch (error) {
+    console.error("Error fetching workspace logo:", error);
+    return { success: false, logo: null as string | null };
+  }
+}

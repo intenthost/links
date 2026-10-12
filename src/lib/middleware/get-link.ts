@@ -1,0 +1,291 @@
+import { primarySql, sql } from "@/server/neon";
+import {
+  getLinkCache,
+  setLinkCache,
+  setNegativeLinkCache,
+} from "@/lib/cache-utils/link-cache";
+import { isPasswordVerifiedCookieValid } from "@/lib/link-password";
+import { parseGeoFromCache, type GeoTargetMap } from "@/lib/link-targeting";
+
+const SLUG_REGEX = /^[a-zA-Z0-9_-]+$/;
+const MAX_SLUG_LENGTH = 50;
+const DEFAULT_DOMAIN = "slugy.co";
+
+export interface GetLinkResult {
+  success: boolean;
+  url?: string | null;
+  linkId?: string;
+  workspaceId?: string;
+  requiresPassword?: boolean;
+  expired?: boolean;
+  error?: string;
+  title?: string | null;
+  image?: string | null;
+  metadesc?: string | null;
+  description?: string | null;
+  geo?: GeoTargetMap | null;
+  trackConversion?: boolean;
+}
+
+interface LinkCache {
+  id: string;
+  url: string;
+  expiresAt: string | null;
+  expirationUrl: string | null;
+  password: string | null;
+  workspaceId: string;
+  domain: string;
+  title: string | null;
+  image: string | null;
+  metadesc?: string | null;
+  description: string | null;
+  geo?: GeoTargetMap | null;
+  trackConversion?: boolean;
+}
+
+const safeDecodeCookieValue = (value: string): string => {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+};
+
+const parseCookies = (cookieHeader: string | null): Record<string, string> => {
+  if (!cookieHeader) return {};
+
+  try {
+    return cookieHeader.split(";").reduce(
+      (acc, cookie) => {
+        // Split on the FIRST "=" — values may legitimately contain "=".
+        const separatorIndex = cookie.indexOf("=");
+        if (separatorIndex <= 0) return acc;
+        const key = cookie.slice(0, separatorIndex).trim();
+        const value = cookie.slice(separatorIndex + 1).trim();
+        if (key && value) acc[key] = safeDecodeCookieValue(value);
+        return acc;
+      },
+      {} as Record<string, string>,
+    );
+  } catch {
+    return {};
+  }
+};
+
+const isValidSlug = (slug: string): boolean => {
+  return Boolean(
+    slug &&
+      slug.length > 0 &&
+      slug.length <= MAX_SLUG_LENGTH &&
+      SLUG_REGEX.test(slug),
+  );
+};
+
+const fetchLinkFromDatabase = async (
+  slug: string,
+  domain: string,
+  client: typeof sql = sql,
+): Promise<LinkCache | null> => {
+  // Direct (slug, domain) hit via @@unique — covers custom domains too.
+  const direct = await client`
+    SELECT
+      l.id,
+      l.url,
+      l."expiresAt",
+      l."expirationUrl",
+      l.password,
+      l."workspaceId",
+      l.domain,
+      l.title,
+      l.image,
+      l.metadesc,
+      l.description,
+      l.geo,
+      l."trackConversion"
+    FROM "links" l
+    WHERE l.slug = ${slug}
+      AND l.domain = ${domain}
+      AND l."isArchived" = false
+      AND l."deletedAt" IS NULL
+    LIMIT 1
+  `;
+
+  if (direct?.[0]) {
+    const row = direct[0];
+    return {
+      id: row.id,
+      url: row.url,
+      expiresAt: row.expiresAt ?? null,
+      expirationUrl: row.expirationUrl ?? null,
+      password: row.password ? "1" : null,
+      workspaceId: row.workspaceId,
+      domain: row.domain,
+      title: row.title ?? null,
+      image: row.image ?? null,
+      metadesc: row.metadesc ?? null,
+      description: row.description ?? null,
+      geo: parseGeoFromCache(row.geo),
+      trackConversion: Boolean(row.trackConversion),
+    };
+  }
+
+  // Fallback for renamed/relinked rows via the customDomain relation.
+  const result = await client`
+    SELECT 
+      l.id, 
+      l.url, 
+      l."expiresAt", 
+      l."expirationUrl", 
+      l.password, 
+      l."workspaceId",
+      l.domain,
+      l.title,
+      l.image,
+      l.metadesc,
+      l.description,
+      l.geo,
+      l."trackConversion",
+      cd.domain as custom_domain
+    FROM "links" l
+    LEFT JOIN "custom_domains" cd ON l."customDomainId" = cd.id
+    WHERE l.slug = ${slug} 
+      AND (l.domain = ${domain} OR cd.domain = ${domain})
+      AND l."isArchived" = false
+      AND l."deletedAt" IS NULL
+    LIMIT 1
+  `;
+
+  if (!result?.[0]) return null;
+
+  const row = result[0];
+  return {
+    id: row.id,
+    url: row.url,
+    expiresAt: row.expiresAt ?? null,
+    expirationUrl: row.expirationUrl ?? null,
+    password: row.password ? "1" : null,
+    workspaceId: row.workspaceId,
+    domain: row.custom_domain || row.domain,
+    title: row.title ?? null,
+    image: row.image ?? null,
+    metadesc: row.metadesc ?? null,
+    description: row.description ?? null,
+    geo: parseGeoFromCache(row.geo),
+    trackConversion: Boolean(row.trackConversion),
+  };
+};
+
+const isLinkExpired = (expiresAt: string | null): boolean => {
+  if (!expiresAt) return false;
+  return new Date(expiresAt) < new Date();
+};
+
+const isPasswordVerified = (
+  cookies: Record<string, string>,
+  domain: string,
+  slug: string,
+): boolean => {
+  return isPasswordVerifiedCookieValid(
+    cookies[`password_verified_${domain}_${slug}`],
+    domain,
+    slug,
+  );
+};
+
+const errorResponse = (
+  url: string | undefined,
+  error: string,
+  success = false,
+): GetLinkResult => ({
+  success,
+  url,
+  error,
+});
+
+export async function getLink(
+  slug: string,
+  cookieHeader?: string | null,
+  origin?: string,
+  domain: string = DEFAULT_DOMAIN,
+): Promise<GetLinkResult> {
+  if (!isValidSlug(slug)) {
+    return errorResponse(undefined, "Invalid slug format");
+  }
+
+  try {
+    const cached = await getLinkCache(slug, domain).catch(() => null);
+
+    if (cached === "missing") {
+      return errorResponse(undefined, "Link not found", false);
+    }
+
+    let link: LinkCache | null =
+      cached && typeof cached === "object" ? cached : null;
+
+    if (link) {
+      link = {
+        ...link,
+        geo: parseGeoFromCache(link.geo),
+      };
+    }
+
+    if (!link) {
+      link = await fetchLinkFromDatabase(slug, domain);
+      if (!link && primarySql !== sql) {
+        link = await fetchLinkFromDatabase(slug, domain, primarySql);
+      }
+
+      if (link) {
+        setLinkCache(slug, link, domain).catch(console.error);
+      } else {
+        setNegativeLinkCache(slug, domain).catch(console.error);
+      }
+    }
+
+    if (!link) {
+      return errorResponse(undefined, "Link not found", false);
+    }
+
+    if (isLinkExpired(link.expiresAt)) {
+      return {
+        success: true,
+        url: link.expirationUrl || (origin ? `${origin}/expired` : undefined),
+        expired: true,
+        error: "Link expired",
+      };
+    }
+
+    if (link.password) {
+      const cookies = parseCookies(cookieHeader ?? null);
+
+      if (!isPasswordVerified(cookies, link.domain, slug)) {
+        return {
+          success: true,
+          url: null,
+          requiresPassword: true,
+          error: "Password required",
+        };
+      }
+    }
+
+    return {
+      success: true,
+      url: link.url,
+      linkId: link.id,
+      workspaceId: link.workspaceId,
+      title: link.title,
+      image: link.image,
+      metadesc: link.metadesc ?? null,
+      description: link.description,
+      geo: link.geo ?? null,
+      trackConversion: Boolean(link.trackConversion),
+    };
+  } catch (error) {
+    console.error(`Error fetching link for slug "${slug}":`, error);
+
+    return errorResponse(
+      origin ? `${origin}/?status=error` : undefined,
+      "Database error",
+    );
+  }
+}

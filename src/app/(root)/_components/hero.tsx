@@ -1,0 +1,111 @@
+import Image from "next/image";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import SignupLink from "@/components/web/signup-link";
+import { cn } from "@/lib/utils";
+import { TrendingUp } from "lucide-react";
+import AnimatedShinyText from "@/components/web/animated-text";
+import HeroLinkForm from "./hero-linkform";
+
+const heroData = {
+  announcement: {
+    text: (
+      <>
+        <TrendingUp className="mr-1.5 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+        Turn clicks into customers
+      </>
+    ),
+  },
+  heading1: "Short Links with Powerful",
+  heading2: (
+    <span className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
+      Analytics
+      <span className="text-[#ffaa40]">
+        <Image
+          src={"/icons/star.svg"}
+          width={50}
+          height={50}
+          alt=""
+          aria-hidden="true"
+          priority
+          fetchPriority="high"
+          sizes="(max-width: 640px) 32px, 50px"
+          className="h-8 w-8 sm:h-[50px] sm:w-[50px]"
+        />
+      </span>
+    </span>
+  ),
+  heading2Gradient:
+    "mx-auto inline-block w-fit py-1  bg-clip-text text-center leading-none font-semibold",
+  subheading1: (
+    <>
+      Short links, custom domains, UTM tracking and click-to-revenue analytics —
+      all in one open-source URL shortener toolkit.
+    </>
+  ),
+} as const;
+
+export default function Hero() {
+  return (
+    <section className="mx-auto max-w-6xl px-3 sm:px-4">
+      <div className="relative h-full w-full">
+        <div className="mt-6 text-center sm:mt-8">
+          <div className="z-10 mb-8! flex items-center justify-center sm:mb-5">
+            <div
+              className={cn(
+                "group rounded-full border border-black/10 bg-neutral-50/90 text-white transition-colors hover:cursor-pointer hover:bg-neutral-100 dark:border-white/5 dark:bg-neutral-900 dark:hover:bg-neutral-800",
+              )}
+            >
+              <AnimatedShinyText className="inline-flex items-center justify-center px-2.5 py-1 text-[11px] transition ease-out hover:text-neutral-600 hover:duration-300 sm:px-3 sm:text-sm hover:dark:text-neutral-400">
+                <span className="inline pb-1" /> {heroData.announcement.text}
+              </AnimatedShinyText>
+            </div>
+          </div>
+
+          <h1 className="space-y-0.5 text-[29px] leading-[0.95] font-medium sm:text-4xl sm:leading-[0.95] md:text-5xl lg:text-[53px]">
+            <span className="block">
+              <span className="text-balance">{heroData.heading1}</span>
+            </span>
+            <span
+              className={cn(heroData.heading2Gradient, "block font-medium")}
+            >
+              {heroData.heading2}
+            </span>
+          </h1>
+
+          <div className="mx-auto max-w-2xl text-zinc-700">
+            <p className="mt-4 px-1 text-sm sm:mt-4 sm:text-base md:px-0 md:text-lg">
+              {heroData.subheading1}
+            </p>
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-3 sm:mt-7">
+              <Button asChild size="lg">
+                <SignupLink>Start for free</SignupLink>
+              </Button>
+              <Button asChild size="lg" variant="outline">
+                <Link href="#analytics-preview">Explore analytics</Link>
+              </Button>
+            </div>
+            <p className="text-muted-foreground mt-3 text-xs">
+              <Link
+                href="#browser-extension"
+                className="text-foreground inline-flex items-center gap-1 font-medium underline-offset-4 hover:underline"
+              >
+                <Image
+                  src="/icons/chrome.svg"
+                  width={14}
+                  height={14}
+                  alt=""
+                  aria-hidden="true"
+                  className="h-3.5 w-3.5"
+                />
+                Get the browser extension
+              </Link>
+            </p>
+          </div>
+        </div>
+
+        <HeroLinkForm />
+      </div>
+    </section>
+  );
+}

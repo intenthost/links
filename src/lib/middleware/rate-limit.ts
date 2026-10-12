@@ -1,0 +1,253 @@
+import { Redis } from "@upstash/redis";
+
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL!,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+});
+
+// ─────────── Constants ───────────
+
+const RATE_LIMITS = {
+  STANDARD: { limit: 80, window: 60 },
+  FAST: { limit: 300, window: 60 },
+  REDIRECT: { limit: 120, window: 60 },
+  REDIRECT_MISS: { limit: 30, window: 60 },
+  TEMP_LINK: { limit: 1, window: 20 * 60 },
+  // Pre-auth account oracle (/api/auth/check-user): tight per-IP budget…
+  AUTH_CHECK_IP: { limit: 30, window: 60 },
+  // …plus a per-target budget so one IP can't sweep many addresses.
+  AUTH_CHECK_TARGET: { limit: 10, window: 60 },
+  // Domain verification hits paid provider APIs — throttle per domain.
+  DOMAIN_VERIFY: { limit: 10, window: 60 },
+  // Public share reports: each MISS fans out to Postgres + Tinybird.
+  SHARE_REPORT_IP: { limit: 60, window: 60 },
+  // Share-report password guesses (scrypt verify is CPU-heavy).
+  SHARE_REPORT_GUESS: { limit: 10, window: 60 },
+  // Lead ingest per API key: several DB writes + Tinybird per call.
+  LEAD_TRACK_KEY: { limit: 300, window: 60 },
+  // Slack test posts per workspace: each one is a chat.postMessage call.
+  SLACK_TEST: { limit: 5, window: 10 * 60 },
+  // Account deletion: destructive + authenticated — a few tries per hour.
+  ACCOUNT_DELETE: { limit: 5, window: 60 * 60 },
+} as const;
+
+// ─────────── Types ───────────
+
+export type RateLimitResult = {
+  success: boolean;
+  limit: number;
+  reset: number;
+  remaining: number;
+};
+
+// ─────────── Helpers ───────────
+
+export const normalizeIp = (ip: string): string => {
+  if (ip.includes(":")) {
+    return ip.split(":").slice(0, 4).join(":");
+  }
+  return ip;
+};
+
+/** Non-cryptographic hash so raw emails never appear in Redis keys. */
+const hashEmail = (email: string): string => {
+  const input = email.trim().toLowerCase();
+  let hash = 5381;
+  for (let i = 0; i < input.length; i++) {
+    hash = (hash << 5) + hash + input.charCodeAt(i);
+    hash = hash | 0;
+  }
+  return Math.abs(hash).toString(36);
+};
+
+const createResult = (
+  success: boolean,
+  limit: number,
+  reset: number,
+  count: number,
+): RateLimitResult => ({
+  success,
+  limit,
+  reset,
+  remaining: Math.max(0, limit - count),
+});
+
+/**
+ * Atomic INCR + EXPIRE via a single Redis pipeline.
+ * Always hits Redis — never skip via a local cache (that was a bypass).
+ */
+const checkRedisLimit = async (
+  key: string,
+  limit: number,
+  windowSeconds: number,
+): Promise<RateLimitResult> => {
+  const now = Date.now();
+
+  try {
+    const pipeline = redis.pipeline();
+    pipeline.incr(key);
+    pipeline.ttl(key);
+    const results = await pipeline.exec<[number, number]>();
+
+    const current = Number(results[0] ?? 0);
+    let ttl = Number(results[1] ?? -1);
+
+    // Key had no TTL (new key or crash between incr/expire previously)
+    if (current === 1 || ttl < 0) {
+      await redis.expire(key, windowSeconds);
+      ttl = windowSeconds;
+    }
+
+    const reset = now + Math.max(ttl, 1) * 1000;
+    return createResult(current <= limit, limit, reset, current);
+  } catch (error) {
+    console.error("[Rate Limit] Redis error:", error);
+    // Fail open for authenticated API traffic so Redis outages don't take the app down.
+    return createResult(true, limit, now + windowSeconds * 1000, 0);
+  }
+};
+
+// ─────────── Public API ───────────
+
+export const checkRateLimit = async (ip: string): Promise<RateLimitResult> => {
+  const { limit, window } = RATE_LIMITS.STANDARD;
+  return checkRedisLimit(`rate-limit:${ip}`, limit, window);
+};
+
+/** Shared Redis limiter for previously "fast" routes (was in-memory only — useless across instances). */
+export const checkFastRateLimit = async (
+  ip: string,
+): Promise<RateLimitResult> => {
+  const { limit, window } = RATE_LIMITS.FAST;
+  return checkRedisLimit(`fast-rate-limit:${ip}`, limit, window);
+};
+
+/** Per-IP throttle for short-link redirects (cache hits included). */
+export const checkRedirectRateLimit = async (
+  ip: string,
+): Promise<RateLimitResult> => {
+  const { limit, window } = RATE_LIMITS.REDIRECT;
+  return checkRedisLimit(`redirect-rate-limit:${ip}`, limit, window);
+};
+
+/** Stricter per-IP throttle when a slug misses cache / DB (anti scan / DDoS). */
+export const checkRedirectMissRateLimit = async (
+  ip: string,
+): Promise<RateLimitResult> => {
+  const { limit, window } = RATE_LIMITS.REDIRECT_MISS;
+  return checkRedisLimit(`redirect-miss-rate-limit:${ip}`, limit, window);
+};
+
+export const checkTempLinkRateLimit = async (
+  ip: string,
+): Promise<RateLimitResult> => {
+  const { limit, window } = RATE_LIMITS.TEMP_LINK;
+  return checkRedisLimit(`temp-link-limit:${ip}`, limit, window);
+};
+
+/**
+ * Throttle for account deletion: per-USER (not per-IP) so NAT sharing can't
+ * be abused and one user can't be griefed by another's traffic. FAILS CLOSED
+ * (unlike the traffic limiters): when Redis is unreachable we refuse the
+ * destructive action with 503 rather than allowing unlimited deletes.
+ */
+export const checkAccountDeleteRateLimit = async (
+  userId: string,
+): Promise<RateLimitResult & { unavailable?: boolean }> => {
+  const { limit, window } = RATE_LIMITS.ACCOUNT_DELETE;
+  const now = Date.now();
+
+  try {
+    const pipeline = redis.pipeline();
+    pipeline.incr(`account-delete:${userId}`);
+    pipeline.ttl(`account-delete:${userId}`);
+    const results = await pipeline.exec<[number, number]>();
+
+    const current = Number(results[0] ?? 0);
+    let ttl = Number(results[1] ?? -1);
+
+    if (current === 1 || ttl < 0) {
+      await redis.expire(`account-delete:${userId}`, window);
+      ttl = window;
+    }
+
+    const reset = now + Math.max(ttl, 1) * 1000;
+    return createResult(current <= limit, limit, reset, current);
+  } catch (error) {
+    console.error(
+      "[Rate Limit] Redis error (account delete, fail-closed):",
+      error,
+    );
+    return {
+      ...createResult(false, limit, now + window * 1000, limit + 1),
+      unavailable: true,
+    };
+  }
+};
+
+/**
+ * Throttle for the pre-auth account oracle. Both buckets must pass: a shared
+ * per-IP budget plus a per-target budget (keyed by hashed email so raw PII
+ * never lands in Redis keys). Normal login/signup (1 hit per submit) never
+ * notices; enumeration sweeps hit 429 fast.
+ */
+export const checkAuthCheckRateLimit = async (
+  ip: string,
+  email: string,
+): Promise<RateLimitResult> => {
+  const target = hashEmail(email);
+  const targetLimit = RATE_LIMITS.AUTH_CHECK_TARGET;
+  const targetResult = await checkRedisLimit(
+    `auth-check:${target}`,
+    targetLimit.limit,
+    targetLimit.window,
+  );
+  if (!targetResult.success) return targetResult;
+
+  const ipLimit = RATE_LIMITS.AUTH_CHECK_IP;
+  return checkRedisLimit(`auth-check-ip:${ip}`, ipLimit.limit, ipLimit.window);
+};
+
+/** Domain verification hits metered provider APIs — throttle per domain. */
+export const checkDomainVerifyRateLimit = async (
+  domain: string,
+): Promise<RateLimitResult> => {
+  const { limit, window } = RATE_LIMITS.DOMAIN_VERIFY;
+  return checkRedisLimit(
+    `domain-verify:${domain.trim().toLowerCase()}`,
+    limit,
+    window,
+  );
+};
+
+/** Public share reports: per-IP budget (each MISS = Postgres + Tinybird). */
+export const checkShareReportRateLimit = async (
+  ip: string,
+): Promise<RateLimitResult> => {
+  const { limit, window } = RATE_LIMITS.SHARE_REPORT_IP;
+  return checkRedisLimit(`share-report-ip:${ip}`, limit, window);
+};
+
+/** Share-report password guesses: per-report budget (scrypt is CPU-heavy). */
+export const checkSharePasswordRateLimit = async (
+  publicId: string,
+): Promise<RateLimitResult> => {
+  const { limit, window } = RATE_LIMITS.SHARE_REPORT_GUESS;
+  return checkRedisLimit(`share-report-guess:${publicId}`, limit, window);
+};
+
+/** Lead ingest: per-key budget (a leaked key must not burn Tinybird/DB). */
+export const checkLeadTrackRateLimit = async (
+  apiKeyId: string,
+): Promise<RateLimitResult> => {
+  const { limit, window } = RATE_LIMITS.LEAD_TRACK_KEY;
+  return checkRedisLimit(`lead-track:${apiKeyId}`, limit, window);
+};
+
+/** Slack test posts: per-workspace budget (each one hits chat.postMessage). */
+export const checkSlackTestRateLimit = async (
+  workspaceId: string,
+): Promise<RateLimitResult> => {
+  const { limit, window } = RATE_LIMITS.SLACK_TEST;
+  return checkRedisLimit(`slack-test:${workspaceId}`, limit, window);
+};

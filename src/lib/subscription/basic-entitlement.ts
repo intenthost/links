@@ -1,0 +1,198 @@
+import { db } from "@/server/db";
+import { syncUserLimits } from "@/lib/subscription/limits-sync";
+import { ensureFreePlanRow } from "@/lib/subscription/free-entitlement";
+import { isLifetimeBillingPeriod } from "@/lib/subscription/reconcile";
+
+export const activeSubscriptionSelect = {
+  id: true,
+  priceId: true,
+  customerId: true,
+  provider: true,
+  status: true,
+  periodStart: true,
+  periodEnd: true,
+  cancelAtPeriodEnd: true,
+  canceledAt: true,
+  plan: {
+    select: {
+      id: true,
+      name: true,
+      planType: true,
+    },
+  },
+};
+
+/**
+ * Activates Basic entitlement for a verified paid Basic checkout/order.
+ * Refuses to overwrite an in-period active/trialing paid subscription.
+ */
+export async function activateBasicEntitlement(input: {
+  userId: string;
+  customerId?: string | null;
+  priceId?: string | null;
+}) {
+  const customerId =
+    input.customerId ??
+    (
+      await db.user.findUnique({
+        where: { id: input.userId },
+        select: { customerId: true },
+      })
+    )?.customerId;
+
+  if (!customerId) return null;
+
+  const existing = await db.subscription.findUnique({
+    where: { referenceId: input.userId },
+    select: {
+      id: true,
+      status: true,
+      periodStart: true,
+      periodEnd: true,
+      plan: { select: { planType: true } },
+    },
+  });
+
+  const status = existing?.status?.toLowerCase() ?? "";
+  const isActivePaidPlan =
+    existing &&
+    ["pro", "growth", "premium"].includes(existing.plan.planType) &&
+    ["active", "trialing"].includes(status) &&
+    (existing.periodEnd > new Date() ||
+      isLifetimeBillingPeriod(
+        existing.plan.planType,
+        existing.periodStart,
+        existing.periodEnd,
+      ));
+
+  if (isActivePaidPlan) {
+    console.warn(
+      `[Basic Entitlement] Refusing to overwrite active paid subscription for user ${input.userId}`,
+    );
+    return db.subscription.findUnique({
+      where: { referenceId: input.userId },
+      select: activeSubscriptionSelect,
+    });
+  }
+
+  const basicPlan = await db.plan.findFirst({
+    where: { planType: "basic" },
+    select: { id: true, monthlyPriceId: true, planType: true },
+  });
+
+  if (!basicPlan?.id) return null;
+
+  const periodStart = new Date();
+  const periodEnd = new Date(periodStart);
+  periodEnd.setFullYear(periodEnd.getFullYear() + 100);
+
+  const priceId = input.priceId ?? basicPlan.monthlyPriceId ?? undefined;
+  const now = new Date();
+
+  const subscription = await db.subscription.upsert({
+    where: { referenceId: input.userId },
+    create: {
+      referenceId: input.userId,
+      planId: basicPlan.id,
+      customerId,
+      priceId,
+      status: "active",
+      provider: "polar",
+      periodStart,
+      periodEnd,
+      billingInterval: "month",
+      cancelAtPeriodEnd: false,
+      canceledAt: null,
+      subscriptionId: null,
+    },
+    update: {
+      planId: basicPlan.id,
+      customerId,
+      priceId,
+      status: "active",
+      provider: "polar",
+      periodStart,
+      periodEnd,
+      billingInterval: "month",
+      cancelAtPeriodEnd: false,
+      canceledAt: null,
+      subscriptionId: null,
+    },
+    select: activeSubscriptionSelect,
+  });
+
+  await db.user.update({
+    where: { id: input.userId },
+    data: { customerId, lifetimeBasicAt: now },
+  });
+
+  await syncUserLimits(input.userId, basicPlan.planType);
+  return subscription;
+}
+
+/**
+ * Ends paid Pro access. Restores active Basic when the user previously
+ * purchased lifetime Basic; otherwise moves them to the Free plan so they
+ * keep working (acquisition-safe) instead of a dead inactive state.
+ */
+export async function downgradeToBasicLimits(input: {
+  subscriptionId: string;
+  canceledAt?: Date;
+}) {
+  const freePlan = await db.plan.findFirst({
+    where: { planType: "free" },
+    select: { id: true, planType: true },
+  });
+
+  const existing = await db.subscription.findUnique({
+    where: { id: input.subscriptionId },
+    select: {
+      referenceId: true,
+      customerId: true,
+      priceId: true,
+    },
+  });
+
+  if (!existing) return false;
+
+  const user = await db.user.findUnique({
+    where: { id: existing.referenceId },
+    select: { lifetimeBasicAt: true, customerId: true },
+  });
+
+  if (user?.lifetimeBasicAt) {
+    await activateBasicEntitlement({
+      userId: existing.referenceId,
+      customerId: existing.customerId ?? user.customerId,
+      priceId: existing.priceId,
+    });
+    return true;
+  }
+
+  const freePlanId = freePlan?.id ?? (await ensureFreePlanRow());
+  if (!freePlanId) {
+    console.error("[Downgrade] Free plan row missing from DB");
+    return false;
+  }
+
+  const periodStart = new Date();
+  const periodEnd = new Date(periodStart);
+  periodEnd.setFullYear(periodEnd.getFullYear() + 100);
+
+  await db.subscription.update({
+    where: { id: input.subscriptionId },
+    data: {
+      status: "active",
+      planId: freePlanId,
+      priceId: null,
+      subscriptionId: null,
+      periodStart,
+      periodEnd,
+      cancelAtPeriodEnd: false,
+      canceledAt: null,
+    },
+  });
+
+  await syncUserLimits(existing.referenceId, "free");
+  return true;
+}

@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "env": {
+    "NODE_ENV": "production"
+  },
+  "git": {
+    "deploymentEnabled": {
+      "main": true
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/subscription-renewal",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/usage",
+      "schedule": "15 2 * * *"
+    },
+    {
+      "path": "/api/cron/webhook-deliveries",
+      "schedule": "30 2 * * *"
+    }
+  ]
+}

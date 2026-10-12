@@ -1,0 +1,25 @@
+# Data Source created from Pipe 'slugy_click_events_pipe'
+
+SCHEMA >
+    `timestamp` DateTime64(3),
+    `workspace_id` String,
+    `link_id` String,
+    `slug` LowCardinality(String),
+    `url` LowCardinality(String),
+    `domain` LowCardinality(String),
+    `country` LowCardinality(String),
+    `city` String,
+    `continent` LowCardinality(String),
+    `device` LowCardinality(String),
+    `browser` LowCardinality(String),
+    `os` LowCardinality(String),
+    `referer` String,
+    `utm_source` LowCardinality(String),
+    `utm_medium` LowCardinality(String),
+    `utm_campaign` LowCardinality(String),
+    `utm_term` LowCardinality(String),
+    `utm_content` LowCardinality(String)
+
+ENGINE "MergeTree"
+ENGINE_PARTITION_KEY "toYYYYMM(timestamp)"
+ENGINE_SORTING_KEY "link_id"
