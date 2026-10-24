@@ -41,9 +41,9 @@ export async function signOutAndRedirect(to = "/login") {
   }
 }
 
-export const checkUserExists = async (email: string) => {
+export const checkUserExists = async (identifier: string) => {
   const response = await fetch(
-    `/api/auth/check-user?email=${encodeURIComponent(email)}`,
+    `/api/auth/check-user?username=${encodeURIComponent(identifier)}`,
   );
   const data = await response.json();
   return data;

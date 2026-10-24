@@ -216,6 +216,7 @@ export const getUserByEmail = async (email: string) => {
       select: {
         id: true,
         email: true,
+        username: true,
         name: true,
         emailVerified: true,
         accounts: {
@@ -228,6 +229,37 @@ export const getUserByEmail = async (email: string) => {
   } catch (error) {
     if (process.env.NODE_ENV === "development") {
       console.error("Failed to retrieve user by email:", error);
+    }
+    return null;
+  }
+};
+
+export const getUserByUsernameOrEmail = async (identifier: string) => {
+  try {
+    const trimmed = identifier.trim();
+    return await db.user.findFirst({
+      where: {
+        OR: [
+          { email: trimmed },
+          { username: trimmed },
+        ],
+      },
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        name: true,
+        emailVerified: true,
+        accounts: {
+          select: {
+            providerId: true,
+          },
+        },
+      },
+    });
+  } catch (error) {
+    if (process.env.NODE_ENV === "development") {
+      console.error("Failed to retrieve user by username or email:", error);
     }
     return null;
   }

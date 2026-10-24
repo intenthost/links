@@ -1,4 +1,7 @@
 import { PrismaClient } from "@prisma/client";
+import { PrismaNeon } from "@prisma/adapter-neon";
+import { neonConfig } from "@neondatabase/serverless";
+import ws from "ws";
 import { PrismaIntentDB } from "./intentdb-adapter";
 
 declare global {
@@ -6,7 +9,14 @@ declare global {
 }
 
 function createPrismaClient(): PrismaClient {
-  const adapter = new PrismaIntentDB(process.env.DATABASE_URL);
+  const url = process.env.DATABASE_URL || "";
+  let adapter;
+  if (url.startsWith("postgres://") || url.startsWith("postgresql://")) {
+    neonConfig.webSocketConstructor = ws;
+    adapter = new PrismaNeon({ connectionString: url });
+  } else {
+    adapter = new PrismaIntentDB(url);
+  }
   return new PrismaClient({ adapter, log: ["error"] });
 }
 

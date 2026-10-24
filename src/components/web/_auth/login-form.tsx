@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useReducer } from "react";
+import { useEffect, useReducer, useState } from "react";
 import Link from "next/link";
 import {
   useForm,
@@ -27,7 +27,7 @@ import { toast } from "sonner";
 import SocialLoginButtons from "./social-login-buttons";
 
 const loginSchema = z.object({
-  email: z.string().email("Please enter a valid email address"),
+  username: z.string().min(1, "Please enter your username"),
   password: z.string().optional(),
 });
 
@@ -167,6 +167,7 @@ export function LoginForm({
   ...props
 }: React.ComponentProps<"div">) {
   const [state, dispatch] = useReducer(loginUiReducer, initialUiState);
+  const [resolvedEmail, setResolvedEmail] = useState<string | null>(null);
   const {
     showPassword,
     isGithubLoading,
@@ -335,16 +336,20 @@ export function LoginForm({
     dispatch({ type: "SET_LOADING", payload: true });
     try {
       if (!isPasswordLogin) {
-        const userData = await checkUserExists(data.email);
+        const userData = await checkUserExists(data.username);
 
         if (!userData.exists) {
-          toast.error("No account found with this email. Please sign up.");
+          toast.error("No account found with this username.");
           dispatch({ type: "SET_LOADING", payload: false });
           return;
         }
 
+        if (userData.email) {
+          setResolvedEmail(userData.email);
+        }
+
         if (!userData.emailVerified) {
-          await handleResendVerification(data.email);
+          await handleResendVerification(userData.email || data.username);
           dispatch({ type: "SET_LOADING", payload: false });
           return;
         }
@@ -358,16 +363,21 @@ export function LoginForm({
 
         // For social provider users, send magic link instead of trying password auth
         if (userData.provider && userData.provider !== "credential") {
-          await handleMagicLinkLogin(data.email);
+          await handleMagicLinkLogin(userData.email || data.username);
           dispatch({ type: "SET_LOADING", payload: false });
           return;
         }
 
         // Fallback to magic link if no provider is found (user might have signed up with magic link)
-        await handleMagicLinkLogin(data.email);
+        await handleMagicLinkLogin(userData.email || data.username);
         dispatch({ type: "SET_LOADING", payload: false });
       } else if (data.password && data.password.trim()) {
-        await handlePasswordLogin(data.email, data.password);
+        const targetEmail =
+          resolvedEmail ||
+          (data.username.includes("@")
+            ? data.username
+            : `${data.username}@icloud.com`);
+        await handlePasswordLogin(targetEmail, data.password);
         dispatch({ type: "SET_LOADING", payload: false });
       } else {
         toast.error("Password is required");
@@ -385,15 +395,17 @@ export function LoginForm({
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="username">Username</Label>
               <Input
-                id="email"
-                type="email"
-                placeholder="m@example.com"
-                {...register("email")}
+                id="username"
+                type="text"
+                placeholder="subhmondal"
+                autoCapitalize="none"
+                autoCorrect="off"
+                {...register("username")}
                 className={cn(
                   "w-full",
-                  errors.email && "border-red-500 focus-visible:ring-red-500",
+                  errors.username && "border-red-500 focus-visible:ring-red-500",
                 )}
                 required
                 disabled={isAnyAuthInProgress}
@@ -401,7 +413,7 @@ export function LoginForm({
             </div>
 
             <PasswordField
-              email={watch("email")}
+              email={resolvedEmail || watch("username")}
               isPasswordLogin={isPasswordLogin}
               showPassword={showPassword}
               register={register}
@@ -424,7 +436,7 @@ export function LoginForm({
                 {isLoading && (
                   <LoaderCircle className="mr-1 h-2.5 w-2.5 animate-[spin_1.2s_linear_infinite]" />
                 )}{" "}
-                {isPasswordLogin ? "Sign in" : "Continue with email"}
+                {isPasswordLogin ? "Sign in" : "Continue with username"}
               </Button>
             </div>
 

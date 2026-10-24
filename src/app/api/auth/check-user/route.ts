@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getUserByEmail } from "@/lib/auth";
+import { getUserByUsernameOrEmail } from "@/lib/auth";
 import {
   checkAuthCheckRateLimit,
   normalizeIp,
 } from "@/lib/middleware/rate-limit";
 
-const emailSchema = z.string().trim().email().max(255);
+const identifierSchema = z.string().trim().min(2).max(255);
 
 function getClientIP(request: Request): string {
   const forwarded = request.headers.get("x-forwarded-for");
@@ -26,16 +26,16 @@ function getClientIP(request: Request): string {
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const parsed = emailSchema.safeParse(searchParams.get("email") ?? "");
+    const raw = searchParams.get("username") || searchParams.get("email") || "";
+    const parsed = identifierSchema.safeParse(raw);
 
     if (!parsed.success) {
-      return NextResponse.json({ error: "Email is required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Username or email is required" },
+        { status: 400 },
+      );
     }
 
-    // Strict pre-auth throttle (per-IP + per-target) — this endpoint is an
-    // account-existence oracle by design (login routes credential vs
-    // magic-link off it), so sweeping it must hit 429 fast. Validated after
-    // parsing so junk input can't burn the target bucket.
     const rate = await checkAuthCheckRateLimit(
       getClientIP(request),
       parsed.data,
@@ -55,10 +55,12 @@ export async function GET(request: Request) {
       );
     }
 
-    const user = await getUserByEmail(parsed.data);
+    const user = await getUserByUsernameOrEmail(parsed.data);
     return NextResponse.json(
       {
         exists: !!user,
+        email: user?.email ?? null,
+        username: user?.username ?? null,
         provider: user?.accounts[0]?.providerId ?? null,
         emailVerified: user?.emailVerified ?? false,
       },
