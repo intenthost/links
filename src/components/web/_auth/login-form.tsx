@@ -384,7 +384,7 @@ export function LoginForm({
       <Card className="mx-auto w-full border-none shadow-none">
         <CardHeader className="space-y-1">
           <CardTitle className="text-center text-xl font-medium">
-            Sign in to Intent Host Links
+            Sign in to Intent Host
           </CardTitle>
         </CardHeader>
         <CardContent>

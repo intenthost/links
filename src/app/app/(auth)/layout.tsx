@@ -8,7 +8,7 @@ const AuthLayout = ({ children }: { children: React.ReactNode }) => {
       <div className="relative flex w-full max-w-sm flex-col items-center gap-4">
         <div className="fixed inset-x-0 -top-52 m-auto aspect-video max-w-lg bg-gradient-to-tr from-yellow-400 to-violet-400 opacity-40 blur-3xl md:inset-x-16" />
         <div className="flex items-center gap-2 self-center text-2xl font-bold tracking-tight text-foreground">
-          Links
+          Intent Host Links
         </div>
         {children}
       </div>
