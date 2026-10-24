@@ -262,7 +262,8 @@ export async function proxy(req: NextRequest): Promise<NextResponse> {
       }
 
       case ROOT_DOMAIN:
-        return handleRootDomain(url, req);
+        // links.intenthost.com IS the app — no separate app. subdomain needed.
+        return handleAppSubdomain(url, req, req.url);
 
       default:
         return handleCustomDomain(url, hostname, req.url, req);
@@ -463,10 +464,7 @@ async function handleRootDomain(
       }
       return redirectTo(appUrl.toString(), redirectStatus);
     }
-    return redirectTo(
-      new URL("/login", `https://${SUBDOMAINS.app}`).toString(),
-      redirectStatus,
-    );
+    return redirectTo(new URL("/login", req.url).toString(), redirectStatus);
   }
 
   if (pathname.startsWith("/api/") || isStaticAsset(pathname)) {
