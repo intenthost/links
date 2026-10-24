@@ -68,3 +68,8 @@ certificates
 
 # Sentry Config File
 .env.sentry-build-plugin
+.env*
+
+# Deployment scripts
+deploy.py
+vercel.py
