@@ -2,7 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaIntentDB } from "./intentdb-adapter";
 
 declare global {
-  var prisma: PrismaClient | undefined;
+  var _prisma: PrismaClient | undefined;
 }
 
 function createPrismaClient(): PrismaClient {
@@ -10,11 +10,20 @@ function createPrismaClient(): PrismaClient {
   return new PrismaClient({ adapter, log: ["error"] });
 }
 
-export const db: PrismaClient = globalThis.prisma ?? createPrismaClient();
-
-if (process.env.NODE_ENV !== "production") {
-  globalThis.prisma = db;
+/** Lazy singleton — only instantiated on first query, not at import time. */
+export function getDb(): PrismaClient {
+  if (!globalThis._prisma) {
+    globalThis._prisma = createPrismaClient();
+  }
+  return globalThis._prisma;
 }
+
+/** Convenience proxy so existing `db.xyz` call-sites keep working. */
+export const db: PrismaClient = new Proxy({} as PrismaClient, {
+  get(_target, prop) {
+    return (getDb() as unknown as Record<string | symbol, unknown>)[prop];
+  },
+});
 
 export async function safeQuery<T>(
   queryFn: () => Promise<T>,

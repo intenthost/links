@@ -70,5 +70,14 @@ function getEnv() {
   }
 }
 
-export const env = getEnv();
+let _env: ReturnType<typeof getEnv> | undefined;
+
+/** Lazy singleton — only validated on first access, not at import time. */
+export const env = new Proxy({} as ReturnType<typeof getEnv>, {
+  get(_target, prop) {
+    if (!_env) _env = getEnv();
+    return (_env as unknown as Record<string | symbol, unknown>)[prop];
+  },
+});
+
 export default env;
