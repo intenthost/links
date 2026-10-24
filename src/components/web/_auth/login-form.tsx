@@ -10,7 +10,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -382,11 +382,6 @@ export function LoginForm({
   return (
     <div className={cn("flex w-full flex-col gap-6", className)} {...props}>
       <Card className="mx-auto w-full border-none shadow-none">
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-center text-xl font-medium tracking-tight">
-            Sign in
-          </CardTitle>
-        </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="space-y-2">
