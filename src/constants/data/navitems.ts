@@ -84,12 +84,12 @@ export const NAV_LINKS = [
       {
         title: "Help",
         tagline: "Get answers to your questions.",
-        href: "https://github.com/slugylink/slugy/discussions/categories/feedback",
+        href: "https://intenthost.com/contact",
         icon: HelpCircleIcon,
       },
       {
         title: "Sponsors",
-        tagline: "Meet the companies backing Slugy.",
+        tagline: "Meet the companies backing Intent Host.",
         href: "/sponsors",
         icon: HandHeart,
       },

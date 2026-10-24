@@ -9,6 +9,6 @@ export const getRootDomain = (url: string): string => {
     const parts = hostname.split(".");
     return parts.slice(-2).join(".");
   } catch {
-    return "slugy.co";
+    return process.env.NEXT_PUBLIC_ROOT_DOMAIN || "";
   }
 };

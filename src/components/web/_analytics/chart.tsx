@@ -526,8 +526,8 @@ const AnalyticsChart = ({
                   </p>
                   <p className="text-muted-foreground max-w-sm text-sm">
                     {showSalesUpgrade
-                      ? "Upgrade to our Growth Plan and track revenue-attributed sales with Slugy"
-                      : "Upgrade to our Pro Plan and start tracking conversion events with Slugy"}
+                      ? "Upgrade to our Growth Plan and track revenue-attributed sales"
+                      : "Upgrade to our Pro Plan and start tracking conversion events"}
                   </p>
                 </div>
                 {workspaceSlug ? (

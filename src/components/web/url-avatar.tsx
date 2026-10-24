@@ -60,7 +60,10 @@ function UrlAvatar({
   className,
   icon,
 }: UrlAvatarProps) {
-  const domain = url?.trim() ? getRootDomain(url) : "slugy.co";
+  const domain =
+    url?.trim()
+      ? getRootDomain(url)
+      : process.env.NEXT_PUBLIC_ROOT_DOMAIN || "";
   const sources = faviconSources(domain);
   const [sourceIndex, setSourceIndex] = useState(0);
   const [loading, setLoading] = useState(true);

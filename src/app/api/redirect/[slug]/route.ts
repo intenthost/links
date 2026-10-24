@@ -49,7 +49,7 @@ export async function POST(
     const requestedDomain =
       typeof domain === "string" && domain.trim()
         ? domain.trim().toLowerCase()
-        : "slugy.co";
+        : process.env.NEXT_PUBLIC_ROOT_DOMAIN || "";
 
     // Fast path: direct (slug, domain) uses @@unique([slug, domain]).
     // Fallback covers renamed/relinked rows via the customDomain relation.

@@ -66,7 +66,7 @@ export async function GET(
     keys: keys.map((key) => ({
       id: key.id,
       name: key.name,
-      maskedKey: key.keyHint ?? "slugy_…(legacy)",
+      maskedKey: key.keyHint ?? "key_…(legacy)",
       linksPermission: key.linksPermission,
       leadsPermission: key.leadsPermission,
       lastUsed: key.lastUsed,
@@ -156,8 +156,8 @@ export async function POST(
       // Full secret returned ONCE — never persisted or re-readable.
       key: { ...apiKey, key },
       endpoints: {
-        links: "https://app.slugy.co/api/v1/link",
-        leads: "https://api.slugy.co/leads_track",
+        links: `${process.env.NEXT_PUBLIC_BASE_URL || ""}/api/v1/link`,
+        leads: `${process.env.NEXT_PUBLIC_BASE_URL || ""}/leads_track`,
       },
     },
     { status: 201 },

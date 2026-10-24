@@ -90,7 +90,10 @@ export async function POST(
     }
 
     // Generate the public URL for the image
-    const imageUrl = `https://files.slugy.co/${fileKey}`;
+    const cdnBase =
+      process.env.NEXT_PUBLIC_CDN_URL ||
+      `https://pub-${process.env.CLOUDFLARE_R2_BUCKET_NAME || "intenthost-r2"}.r2.dev`;
+    const imageUrl = `${cdnBase}/${fileKey}`;
 
     return NextResponse.json({ url: imageUrl });
   } catch (error) {

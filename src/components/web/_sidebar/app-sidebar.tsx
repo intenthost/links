@@ -7,7 +7,7 @@ import {
   SidebarFooter,
   SidebarHeader,
 } from "@/components/ui/sidebar";
-import AppLogo from "@/components/web/app-logo";
+import Link from "next/link";
 
 // ============================================================================
 // Types
@@ -35,16 +35,31 @@ export default function AppSidebar({
   workspaces,
   ...props
 }: AppSidebarProps) {
+  const currentWorkspace =
+    workspaces.find((ws) => ws.slug === workspaceslug) ?? workspaces[0];
+  const workspaceName = currentWorkspace?.name || "Workspace";
+  const workspaceSlug = currentWorkspace?.slug || workspaceslug;
+  const workspaceInitial = workspaceName.charAt(0).toUpperCase();
+
   return (
     <Sidebar variant="inset" collapsible="icon" {...props}>
       <SidebarHeader className="p-3">
-        <div className="flex items-center gap-2.5 px-1 py-1.5">
-          <AppLogo />
-          <div className="grid flex-1 text-left text-sm leading-tight">
-            <span className="truncate font-semibold tracking-tight">Links</span>
-            <span className="truncate text-xs text-muted-foreground">Intent Host</span>
+        <Link
+          href={`/${workspaceSlug}`}
+          className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-sidebar-accent transition-colors"
+        >
+          <div className="bg-primary/10 text-primary flex aspect-square size-8 items-center justify-center rounded-lg font-bold text-sm">
+            {workspaceInitial}
           </div>
-        </div>
+          <div className="grid flex-1 text-left text-sm leading-tight">
+            <span className="truncate font-semibold tracking-tight">
+              {workspaceName}
+            </span>
+            <span className="truncate text-xs text-muted-foreground">
+              {workspaceSlug}
+            </span>
+          </div>
+        </Link>
       </SidebarHeader>
 
       <SidebarContent className="scrollbar-thin">

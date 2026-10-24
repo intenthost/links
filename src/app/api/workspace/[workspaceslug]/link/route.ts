@@ -36,7 +36,7 @@ import {
   type GeoTargetMap,
 } from "@/lib/link-targeting";
 
-const DEFAULT_DOMAIN = "slugy.co";
+const DEFAULT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "";
 const MAX_TAGS_PER_WORKSPACE = 5;
 
 // Input validation schema
@@ -336,7 +336,7 @@ export async function POST(
       return jsonWithETag(
         req,
         apiErrorPayload(
-          "Recursive links are not allowed. You cannot shorten a Slugy or custom-domain short link.",
+          "Recursive links are not allowed. You cannot shorten an existing or custom-domain short link.",
           "BAD_REQUEST",
         ),
         { status: 400 },

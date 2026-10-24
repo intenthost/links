@@ -110,7 +110,7 @@ function LinkQrCode({ domain, code, customization }: LinkQrCodeProps) {
   const qrCodeRef = useRef<QRCodeStyling | null>(null);
 
   const slug = code?.trim() ?? "";
-  const host = domain?.trim() || "slugy.co";
+  const host = domain?.trim() || process.env.NEXT_PUBLIC_ROOT_DOMAIN || "";
 
   const options = useMemo(() => {
     if (!slug) return null;

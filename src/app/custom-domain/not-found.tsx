@@ -164,12 +164,12 @@ const CustomDomainNotFound = memo(function CustomDomainNotFound() {
           <p>
             Powered by{" "}
             <a
-              href="https://slugy.co"
+              href="https://intenthost.com"
               target="_blank"
               rel="noopener noreferrer"
               className="font-medium text-[#9c40ff] hover:underline"
             >
-              Slugy
+              Intent Host
             </a>
           </p>
         </motion.div>

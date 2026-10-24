@@ -31,7 +31,7 @@ import { isRecursiveShortLink } from "@/lib/url-policy";
 import { validateUrlSafety } from "@/server/actions/url-scan";
 import { waitUntil } from "@vercel/functions";
 
-const DEFAULT_DOMAIN = "slugy.co";
+const DEFAULT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "";
 const MAX_TAGS_PER_WORKSPACE = 5;
 
 const CORS_HEADERS = {
@@ -292,7 +292,7 @@ export async function POST(req: Request) {
       return jsonWithETag(
         req,
         apiErrorPayload(
-          "Recursive links are not allowed. You cannot shorten a Slugy or custom-domain short link.",
+          "Recursive links are not allowed. You cannot shorten an existing or custom-domain short link.",
           "BAD_REQUEST",
         ),
         { status: 400, headers: CORS_HEADERS },

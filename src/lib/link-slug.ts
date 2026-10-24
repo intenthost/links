@@ -14,11 +14,11 @@ const generateRandomSlug = customAlphabet(
 
 export { generateRandomSlug };
 
-/** Letters, numbers, `_` and `-` only. Dots, slashes, spaces, `&` etc. are out. */
-export const LINK_SLUG_PATTERN = /^[A-Za-z0-9_-]{3,50}$/;
+/** Letters, numbers, `_` and `-` only. */
+export const LINK_SLUG_PATTERN = /^[A-Za-z0-9_-]{1,50}$/;
 
 export const MAX_LINK_SLUG_LENGTH = 50;
-export const MIN_LINK_SLUG_LENGTH = 3;
+export const MIN_LINK_SLUG_LENGTH = 1;
 
 /**
  * Single-segment paths that resolve to a page/API on slugy.co (or a

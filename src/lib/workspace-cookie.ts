@@ -1,7 +1,8 @@
 import type { NextRequest, NextResponse } from "next/server";
 
 /** Last-used workspace slug. Middleware reads this to skip Redis/DB on `/`. */
-export const WORKSPACE_COOKIE_NAME = "slugy_workspace";
+export const WORKSPACE_COOKIE_NAME = "intent_workspace";
+export const LEGACY_WORKSPACE_COOKIE_NAME = "slugy_workspace";
 
 export const WORKSPACE_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
@@ -82,7 +83,10 @@ export function workspaceSlugFromPath(pathname: string): string | null {
 }
 
 export function getWorkspaceCookie(req: NextRequest): string | null {
-  return parseWorkspaceSlug(req.cookies.get(WORKSPACE_COOKIE_NAME)?.value);
+  return (
+    parseWorkspaceSlug(req.cookies.get(WORKSPACE_COOKIE_NAME)?.value) ||
+    parseWorkspaceSlug(req.cookies.get(LEGACY_WORKSPACE_COOKIE_NAME)?.value)
+  );
 }
 
 export function applyWorkspaceCookie(

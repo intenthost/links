@@ -50,7 +50,7 @@ export const PRICING_COPY = {
   promoDuration: "forever",
   promoMaxRedemptions: 25,
   yearlySavings: "2 Months Free",
-  loginUrl: "https://app.slugy.co/login",
+  loginUrl: "/login",
 } as const;
 
 export const PRICING_CURRENCY_FORMAT = {
@@ -137,7 +137,7 @@ const PREMIUM_YEARLY_PRICE = 1990;
 
 export const FREE_PLAN: Plan = {
   name: "Free",
-  description: "Perfect for trying Slugy. Upgrade when you grow.",
+  description: "Perfect for getting started. Upgrade when you grow.",
   monthlyPrice: 0,
   yearlyPrice: 0,
   monthlyPriceId: "",

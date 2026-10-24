@@ -101,7 +101,10 @@ export async function PATCH(
     }
 
     // Generate the public URL for the logo
-    const logoUrl = `https://files.slugy.co/${fileKey}`;
+    const cdnBase =
+      process.env.NEXT_PUBLIC_CDN_URL ||
+      `https://pub-${process.env.CLOUDFLARE_R2_BUCKET_NAME || "intenthost-r2"}.r2.dev`;
+    const logoUrl = `${cdnBase}/${fileKey}`;
 
     // Update workspace with new logo URL
     const updatedWorkspace = await db.workspace.update({

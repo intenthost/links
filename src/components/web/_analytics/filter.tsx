@@ -653,7 +653,7 @@ const FilterActions = ({ filterCategories }: FilterActionsProps) => {
       a.href = objectUrl;
       const disposition = res.headers.get("Content-Disposition");
       const match = disposition?.match(/filename="?([^";]+)"?/);
-      a.download = match?.[1] ?? `slugy-analytics-${slug}.csv`;
+      a.download = match?.[1] ?? `analytics-${slug}.csv`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(objectUrl);
@@ -828,8 +828,10 @@ const FilterActions = ({ filterCategories }: FilterActionsProps) => {
     option: FilterOption,
   ): string => {
     switch (category.id) {
-      case "slug_key":
-        return `slugy.co/${(option as LinkAnalytics).slug}`;
+      case "slug_key": {
+        const root = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "";
+        return `${root}/${(option as LinkAnalytics).slug}`;
+      }
       case "continent_key":
         return (option as ContinentAnalytics).continent;
       case "country_key":

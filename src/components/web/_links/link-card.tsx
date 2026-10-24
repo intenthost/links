@@ -54,7 +54,7 @@ const EditLinkForm = dynamic(
 
 // Constants
 const COPY_TIMEOUT = 2000;
-const DEFAULT_DOMAIN = "slugy.co";
+const DEFAULT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "";
 
 // Types
 type DialogType = "dropdown" | "edit" | "qrCode" | "delete";

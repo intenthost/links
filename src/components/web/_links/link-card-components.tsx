@@ -28,8 +28,9 @@ import { cn } from "@/lib/utils";
 import { LoaderCircle } from "@/utils/icons/loader-circle";
 import UrlAvatar from "@/components/web/url-avatar";
 
-// Constants
-export const SHORT_URL_BASE = "https://slugy.co/";
+export const SHORT_URL_BASE = process.env.NEXT_PUBLIC_BASE_URL
+  ? `${process.env.NEXT_PUBLIC_BASE_URL.replace(/\/+$/, "")}/`
+  : "/";
 
 // Utility functions
 export const cleanUrl = (url: string): string =>

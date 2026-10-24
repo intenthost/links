@@ -1,14 +1,13 @@
 import type { Metadata, Viewport } from "next";
 
-const ROOT_DOMAIN = (process.env.NEXT_PUBLIC_ROOT_DOMAIN?.trim() || "slugy.co")
+const ROOT_DOMAIN = (process.env.NEXT_PUBLIC_ROOT_DOMAIN?.trim() || "")
   .replace(/^https?:\/\//, "")
   .replace(/\/$/, "");
 
 const IS_LOCAL = ROOT_DOMAIN.startsWith("localhost");
 const BASE_URL = `${IS_LOCAL ? "http" : "https"}://${ROOT_DOMAIN}`;
 
-// PNG/JPG at 1200x630 has the best scraper compatibility
-const OG_IMAGE_URL = "https://files.slugy.co/slugy-og.png";
+const OG_IMAGE_URL = "/favicon.ico";
 
 // Outcome-led, but keeps the "short link" head term so it still reads as a
 // category match in search and on link previews. The differentiator is that

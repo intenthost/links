@@ -9,9 +9,12 @@ interface ApiResult {
 
 // Helper: Get Vercel credentials
 function getVercelCredentials() {
-  const token = process.env.VERCEL_TOKEN;
-  const projectId = process.env.VERCEL_PROJECT_ID;
-  const teamId = process.env.VERCEL_TEAM_ID;
+  const token =
+    process.env.VERCEL_TOKEN || process.env.CLOUD_API_TOKEN;
+  const projectId =
+    process.env.VERCEL_PROJECT_ID || process.env.PROJECT_ID;
+  const teamId =
+    process.env.VERCEL_TEAM_ID || process.env.TEAM_ID;
 
   if (!token || !projectId || !teamId) {
     throw new Error("Vercel credentials not configured");

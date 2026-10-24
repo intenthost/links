@@ -169,9 +169,7 @@ export default memo(function ApiKeysClient({
               Generate workspace-scoped keys for integrations, including the
               Chrome extension and lead tracking.{" "}
               <a
-                href="https://slugy.co/blogs/lead-conversion-tracking"
-                target="_blank"
-                rel="noopener noreferrer"
+                href="/blogs/lead-conversion-tracking"
                 className="text-foreground underline underline-offset-4 hover:no-underline"
               >
                 View setup instructions

@@ -1,7 +1,7 @@
 import { type MetadataRoute } from "next";
 
 export default function robots(): MetadataRoute.Robots {
-  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN?.trim() || "slugy.co";
+  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN?.trim() || "";
   const baseUrl = `https://${rootDomain}`;
 
   // /_next/ powers rendering, /share/ hosts indexable reports, and /b/+/bio/

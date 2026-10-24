@@ -1,4 +1,4 @@
-const DEFAULT_ROOT = "slugy.co";
+const DEFAULT_ROOT = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "";
 
 function getRootHosts(): string[] {
   const root =
@@ -71,7 +71,7 @@ export async function assertSafeDestinationUrl(
     return {
       ok: false,
       message:
-        "Recursive links are not allowed. You cannot shorten a Slugy or custom-domain short link.",
+        "Recursive links are not allowed. You cannot shorten a system or custom-domain short link.",
     };
   }
 

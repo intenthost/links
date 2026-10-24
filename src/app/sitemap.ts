@@ -2,7 +2,7 @@ import { type MetadataRoute } from "next";
 import { getAllPosts } from "@/content/blogs";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN?.trim() || "slugy.co";
+  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN?.trim() || "";
   const baseUrl = `https://${rootDomain}`;
 
   // Blog lastModified uses real content dates; static routes omit it rather

@@ -143,16 +143,16 @@ const NavItemComponent = memo<{
     <Collapsible asChild defaultOpen={isActive} className="group/collapsible">
       <SidebarMenuItem>
         {item.url ? (
-          <Link
-            href={item.url}
-            prefetch={PREFETCH_NAV}
-            onClick={onNavItemClick}
-          >
-            <SidebarMenuButton tooltip={item.title} className={buttonClasses}>
+          <SidebarMenuButton asChild tooltip={item.title} className={buttonClasses}>
+            <Link
+              href={item.url}
+              prefetch={PREFETCH_NAV}
+              onClick={onNavItemClick}
+            >
               {item.icon && <item.icon className="size-4" strokeWidth={2} />}
               <span className="text-sm">{item.title}</span>
-            </SidebarMenuButton>
-          </Link>
+            </Link>
+          </SidebarMenuButton>
         ) : (
           <CollapsibleTrigger asChild>
             <SidebarMenuButton tooltip={item.title} className={buttonClasses}>

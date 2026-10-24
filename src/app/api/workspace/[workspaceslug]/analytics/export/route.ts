@@ -85,7 +85,7 @@ export async function GET(
       rows = (result.data ?? []).slice(0, MAX_EXPORT_ROWS).map((row) => ({
         timestamp: row.day,
         short_link: row.sales_slug
-          ? `${row.domain ?? "slugy.co"}/${row.sales_slug}`
+          ? `${row.domain ?? (process.env.NEXT_PUBLIC_ROOT_DOMAIN || "")}/${row.sales_slug}`
           : "",
         destination: row.sales_url ?? "",
         country: row.country ?? "",
@@ -115,7 +115,7 @@ export async function GET(
         timestamp: row.day,
         short_link:
           row["meta.slug"] != null
-            ? `${row.domain ?? "slugy.co"}/${row["meta.slug"]}`
+            ? `${row.domain ?? (process.env.NEXT_PUBLIC_ROOT_DOMAIN || "")}/${row["meta.slug"]}`
             : "",
         destination: row["meta.url"] ?? "",
         country: row.country ?? "",
@@ -143,7 +143,7 @@ export async function GET(
         timestamp: row.day,
         short_link:
           row["meta.slug"] != null
-            ? `${row.domain ?? "slugy.co"}/${row["meta.slug"]}`
+            ? `${row.domain ?? (process.env.NEXT_PUBLIC_ROOT_DOMAIN || "")}/${row["meta.slug"]}`
             : "",
         destination: row["meta.url"] ?? "",
         country: row.country ?? "",
@@ -183,7 +183,7 @@ export async function GET(
         status: 200,
         headers: {
           "Content-Type": "text/csv; charset=utf-8",
-          "Content-Disposition": `attachment; filename="slugy-analytics-${workspaceslug}-${timePeriod}.csv"`,
+          "Content-Disposition": `attachment; filename="analytics-${workspaceslug}-${timePeriod}.csv"`,
           "Cache-Control": "private, no-store",
         },
       });
@@ -196,7 +196,7 @@ export async function GET(
       status: 200,
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="slugy-analytics-${workspaceslug}-${timePeriod}-${new Date().toISOString().slice(0, 10)}.csv"`,
+        "Content-Disposition": `attachment; filename="analytics-${workspaceslug}-${timePeriod}-${new Date().toISOString().slice(0, 10)}.csv"`,
         "Cache-Control": "private, no-store",
         "X-Export-Rows": String(rows.length),
       },
