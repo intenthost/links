@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useReducer, useState } from "react";
+import { useEffect, useReducer } from "react";
 import Link from "next/link";
 import {
   useForm,
@@ -28,7 +28,7 @@ import SocialLoginButtons from "./social-login-buttons";
 
 const loginSchema = z.object({
   username: z.string().min(1, "Please enter your username"),
-  password: z.string().optional(),
+  password: z.string().min(1, "Please enter your password"),
 });
 
 type LoginFormData = z.infer<typeof loginSchema>;
@@ -52,7 +52,6 @@ type LoginUiState = {
   showPassword: boolean;
   isGithubLoading: boolean;
   isGoogleLoading: boolean;
-  isPasswordLogin: boolean;
   isLoading: boolean;
   isRedirecting: boolean;
   lastUsedProvider: string | null;
@@ -62,7 +61,6 @@ type LoginUiAction =
   | { type: "SET_SHOW_PASSWORD"; payload: boolean }
   | { type: "SET_GITHUB_LOADING"; payload: boolean }
   | { type: "SET_GOOGLE_LOADING"; payload: boolean }
-  | { type: "SET_PASSWORD_LOGIN"; payload: boolean }
   | { type: "SET_LOADING"; payload: boolean }
   | { type: "SET_REDIRECTING"; payload: boolean }
   | { type: "SET_LAST_PROVIDER"; payload: string | null }
@@ -72,7 +70,6 @@ const initialUiState: LoginUiState = {
   showPassword: false,
   isGithubLoading: false,
   isGoogleLoading: false,
-  isPasswordLogin: false,
   isLoading: false,
   isRedirecting: false,
   lastUsedProvider: null,
@@ -86,8 +83,6 @@ function loginUiReducer(state: LoginUiState, action: LoginUiAction) {
       return { ...state, isGithubLoading: action.payload };
     case "SET_GOOGLE_LOADING":
       return { ...state, isGoogleLoading: action.payload };
-    case "SET_PASSWORD_LOGIN":
-      return { ...state, isPasswordLogin: action.payload };
     case "SET_LOADING":
       return { ...state, isLoading: action.payload };
     case "SET_REDIRECTING":
@@ -101,31 +96,25 @@ function loginUiReducer(state: LoginUiState, action: LoginUiAction) {
 }
 
 function PasswordField({
-  email,
-  isPasswordLogin,
   showPassword,
   register,
   errors,
   disabled,
   onTogglePassword,
 }: {
-  email: string;
-  isPasswordLogin: boolean;
   showPassword: boolean;
   register: UseFormRegister<LoginFormData>;
   errors: FieldErrors<LoginFormData>;
   disabled: boolean;
   onTogglePassword: () => void;
 }) {
-  if (!isPasswordLogin) return null;
-
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <Label htmlFor="password">Password</Label>
         <Link
           className="text-muted-foreground text-xs underline"
-          href={`/forgot-password?email=${email}`}
+          href="/forgot-password"
         >
           Forgot Password?
         </Link>
@@ -134,15 +123,15 @@ function PasswordField({
         <Input
           id="password"
           type={showPassword ? "text" : "password"}
-          placeholder="Enter your password"
+          placeholder="Password"
           {...register("password", {
-            required: isPasswordLogin ? "Password is required" : false,
+            required: "Password is required",
           })}
           className={cn(
             "w-full pr-10",
             errors.password && "border-red-500 focus-visible:ring-red-500",
           )}
-          required={isPasswordLogin}
+          required
           disabled={disabled}
         />
         <button
@@ -167,12 +156,10 @@ export function LoginForm({
   ...props
 }: React.ComponentProps<"div">) {
   const [state, dispatch] = useReducer(loginUiReducer, initialUiState);
-  const [resolvedEmail, setResolvedEmail] = useState<string | null>(null);
   const {
     showPassword,
     isGithubLoading,
     isGoogleLoading,
-    isPasswordLogin,
     isLoading,
     isRedirecting,
     lastUsedProvider,
@@ -335,54 +322,16 @@ export function LoginForm({
   const onSubmit = async (data: LoginFormData) => {
     dispatch({ type: "SET_LOADING", payload: true });
     try {
-      if (!isPasswordLogin) {
-        const userData = await checkUserExists(data.username);
+      const userData = await checkUserExists(data.username);
 
-        if (!userData.exists) {
-          toast.error("No account found with this username.");
-          dispatch({ type: "SET_LOADING", payload: false });
-          return;
-        }
-
-        if (userData.email) {
-          setResolvedEmail(userData.email);
-        }
-
-        if (!userData.emailVerified) {
-          await handleResendVerification(userData.email || data.username);
-          dispatch({ type: "SET_LOADING", payload: false });
-          return;
-        }
-
-        // If user has a credential account, show password field
-        if (userData.provider === "credential") {
-          dispatch({ type: "SET_PASSWORD_LOGIN", payload: true });
-          dispatch({ type: "SET_LOADING", payload: false });
-          return;
-        }
-
-        // For social provider users, send magic link instead of trying password auth
-        if (userData.provider && userData.provider !== "credential") {
-          await handleMagicLinkLogin(userData.email || data.username);
-          dispatch({ type: "SET_LOADING", payload: false });
-          return;
-        }
-
-        // Fallback to magic link if no provider is found (user might have signed up with magic link)
-        await handleMagicLinkLogin(userData.email || data.username);
+      if (!userData.exists) {
+        toast.error("Invalid username or password");
         dispatch({ type: "SET_LOADING", payload: false });
-      } else if (data.password && data.password.trim()) {
-        const targetEmail =
-          resolvedEmail ||
-          (data.username.includes("@")
-            ? data.username
-            : `${data.username}@icloud.com`);
-        await handlePasswordLogin(targetEmail, data.password);
-        dispatch({ type: "SET_LOADING", payload: false });
-      } else {
-        toast.error("Password is required");
-        dispatch({ type: "SET_LOADING", payload: false });
+        return;
       }
+
+      const targetEmail = userData.email || data.username;
+      await handlePasswordLogin(targetEmail, data.password);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to sign in");
       dispatch({ type: "SET_LOADING", payload: false });
@@ -399,7 +348,7 @@ export function LoginForm({
               <Input
                 id="username"
                 type="text"
-                placeholder="subhmondal"
+                placeholder="Username"
                 autoCapitalize="none"
                 autoCorrect="off"
                 {...register("username")}
@@ -413,8 +362,6 @@ export function LoginForm({
             </div>
 
             <PasswordField
-              email={resolvedEmail || watch("username")}
-              isPasswordLogin={isPasswordLogin}
               showPassword={showPassword}
               register={register}
               errors={errors}
@@ -435,8 +382,8 @@ export function LoginForm({
               >
                 {isLoading && (
                   <LoaderCircle className="mr-1 h-2.5 w-2.5 animate-[spin_1.2s_linear_infinite]" />
-                )}{" "}
-                {isPasswordLogin ? "Sign in" : "Continue with username"}
+                )}
+                Sign in
               </Button>
             </div>
 
