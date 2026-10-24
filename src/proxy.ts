@@ -463,7 +463,10 @@ async function handleRootDomain(
       }
       return redirectTo(appUrl.toString(), redirectStatus);
     }
-    return redirectTo(new URL("/login", req.url).toString(), redirectStatus);
+    return redirectTo(
+      new URL("/login", `https://${SUBDOMAINS.app}`).toString(),
+      redirectStatus,
+    );
   }
 
   if (pathname.startsWith("/api/") || isStaticAsset(pathname)) {
