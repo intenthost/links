@@ -1,6 +1,6 @@
 import { Metadata } from "next";
 import Link from "next/link";
-import { Compass, FileQuestion } from "lucide-react";
+import { FileQuestion } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Bricolage_Grotesque } from "next/font/google";
 import { cn } from "@/lib/utils";
@@ -13,20 +13,13 @@ const bricolage = Bricolage_Grotesque({
 });
 
 export const metadata: Metadata = {
-  title: "Page Not Found | Slugy",
+  title: "Page Not Found | Intent Host",
   description: "The page you're looking for doesn't exist.",
   robots: {
     index: false,
     follow: false,
   },
 };
-
-const POPULAR = [
-  { href: "/features", label: "Features", note: "Tracking, domains & more" },
-  { href: "/pricing", label: "Pricing", note: "Free, Pro & Growth" },
-  { href: "/tools", label: "Free Tools", note: "QR, UTM & checkers" },
-  { href: "/blogs", label: "Blog", note: "Guides & comparisons" },
-];
 
 export default function NotFound() {
   return (
@@ -55,30 +48,8 @@ export default function NotFound() {
           <Link href="/">Go to Homepage</Link>
         </Button>
         <Button asChild size="lg" variant="outline" className="bg-white/80">
-          <Link href="https://github.com/slugylink/slugy/discussions/categories/feedback">
-            Report a broken link
-          </Link>
+          <Link href="/login">Go to Login</Link>
         </Button>
-      </div>
-
-      <div className="mt-12 grid w-full max-w-2xl gap-3 sm:grid-cols-2">
-        {POPULAR.map((p) => (
-          <Link
-            key={p.href}
-            href={p.href}
-            className="group flex items-center gap-3 rounded-2xl border-2 border-white/50 bg-white/60 p-4 backdrop-blur-sm transition-shadow hover:shadow-md"
-          >
-            <span className="bg-muted flex h-10 w-10 shrink-0 items-center justify-center rounded-lg">
-              <Compass className="h-5 w-5 text-zinc-600" />
-            </span>
-            <span>
-              <span className="block text-[15px] font-medium text-zinc-900">
-                {p.label}
-              </span>
-              <span className="block text-xs text-zinc-500">{p.note}</span>
-            </span>
-          </Link>
-        ))}
       </div>
     </div>
   );
