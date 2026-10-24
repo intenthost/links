@@ -444,15 +444,10 @@ async function handleRootDomain(
     const { token } = await getCachedSession(req);
     if (token) {
       const appUrl = new URL(req.url);
-      appUrl.hostname = SUBDOMAINS.app;
-      // Preserve ?slugy_id= (and other params) across the root → app hop
-      // so signup attribution survives the subdomain change.
+      // Stay on links.intenthost.com — it IS the app, no subdomain hop needed.
       appUrl.search = url.search;
       const workspaceSlug = getWorkspaceCookie(req);
       if (workspaceSlug) {
-        // Same cross-account staleness as the app-subdomain path — only
-        // carry a slug the current user can access, else land on app `/`
-        // and let it resolve (which also refreshes the cookie correctly).
         const userId = await resolveMiddlewareUserId(req);
         const validSlug =
           userId != null
