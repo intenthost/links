@@ -380,11 +380,11 @@ export function LoginForm({
   };
 
   return (
-    <div className={cn("flex flex-col gap-6", className)} {...props}>
+    <div className={cn("flex w-full flex-col gap-6", className)} {...props}>
       <Card className="mx-auto w-full border-none shadow-none">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-center text-xl font-medium">
-            Sign in to Intent Host
+          <CardTitle className="text-center text-xl font-medium tracking-tight">
+            Sign in to Intent Host Links
           </CardTitle>
         </CardHeader>
         <CardContent>
