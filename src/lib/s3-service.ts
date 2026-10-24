@@ -12,21 +12,13 @@ export class S3Service {
     }
     
     this.bucketName = bucketName;
-    this.accountId = process.env.CLOUDFLARE_ACCOUNT_ID!;
-    
-    if (!this.accountId) {
-      throw new Error("CLOUDFLARE_ACCOUNT_ID environment variable is required");
-    }
-    
-    if (!process.env.CLOUDFLARE_R2_ACCESS_KEY_ID || !process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY) {
-      throw new Error("CLOUDFLARE_R2_ACCESS_KEY_ID and CLOUDFLARE_R2_SECRET_ACCESS_KEY environment variables are required");
-    }
+    this.accountId = process.env.CLOUDFLARE_ACCOUNT_ID || "dummy_account_id";
     
     this.s3 = new AWS.S3({
       region: "auto", // Cloudflare R2 uses "auto" region
       endpoint: `https://${this.accountId}.r2.cloudflarestorage.com`,
-      accessKeyId: process.env.CLOUDFLARE_R2_ACCESS_KEY_ID,
-      secretAccessKey: process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY,
+      accessKeyId: process.env.CLOUDFLARE_R2_ACCESS_KEY_ID || "dummy_access_key",
+      secretAccessKey: process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY || "dummy_secret_key",
       signatureVersion: "v4",
       s3ForcePathStyle: true, // Required for R2
     });
@@ -113,11 +105,5 @@ export class S3Service {
   }
 }
 
-// Initialize S3Service with proper error handling
-const bucketName = process.env.CLOUDFLARE_R2_BUCKET_NAME;
-if (!bucketName) {
-  console.error("CLOUDFLARE_R2_BUCKET_NAME environment variable is not set");
-  throw new Error("CLOUDFLARE_R2_BUCKET_NAME environment variable is required");
-}
-
+const bucketName = process.env.CLOUDFLARE_R2_BUCKET_NAME || "intenthost-r2";
 export const s3Service = new S3Service(bucketName);

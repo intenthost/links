@@ -7,15 +7,6 @@ const baseSchema = z.object({
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   BETTER_AUTH_SECRET: z.string().min(1, "BETTER_AUTH_SECRET is required"),
 
-  // ── Billing (Polar)
-  POLAR_MODE: z.enum(["sandbox", "production"]).default("sandbox"),
-  POLAR_ACCESS_TOKEN: z.string().optional(),
-  POLAR_WEBHOOK_SECRET: z.string().optional(),
-  POLAR_SUCCESS_URL: z
-    .string()
-    .url("POLAR_SUCCESS_URL must be a valid URL")
-    .optional(),
-
   // ── Auth
   BETTER_AUTH_URL: z.string().optional(),
   GITHUB_CLIENT_ID: z.string().optional(),
@@ -30,19 +21,11 @@ const baseSchema = z.object({
 });
 
 // Parse and validate environment variables.
-// Core vars fail fast in every environment; provider-heavy vars (Polar,
-// Resend, Redis) are hard-required only in production so `next dev` keeps
-// working with a minimal .env.local. OAuth pairs must be complete
-// (both set or both absent) everywhere — a half-configured provider is a
-// runtime 500 at login time.
+// Core vars fail fast in every environment; optional vars
+// (Resend, Redis) are checked where needed.
 const envSchema = baseSchema.superRefine((val, ctx) => {
   if (isProduction) {
     const requiredInProd = [
-      "POLAR_ACCESS_TOKEN",
-      "POLAR_WEBHOOK_SECRET",
-      "RESEND_API_KEY",
-      "UPSTASH_REDIS_REST_URL",
-      "UPSTASH_REDIS_REST_TOKEN",
       "BETTER_AUTH_URL",
     ] as const;
     for (const key of requiredInProd) {

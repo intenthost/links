@@ -183,13 +183,7 @@ export async function DELETE(
       // If no other workspace is found, no new default is set, and deletion proceeds
     }
 
-    // Usage rows reference the workspace WITHOUT onDelete: Cascade, so they
-    // must go first — otherwise the delete below dies with an FK 500.
-    // (All other workspace dependents cascade at the DB level.)
-    await db.$transaction([
-      db.usage.deleteMany({ where: { workspaceId: workspace.id } }),
-      db.workspace.delete({ where: { id: workspace.id } }),
-    ]);
+    await db.workspace.delete({ where: { id: workspace.id } });
 
     // Get the route path from the request
     const path = new URL(req.url).pathname;

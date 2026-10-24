@@ -21,8 +21,9 @@ import {
 } from "@/lib/auth-client";
 import { clearWorkspaceSlugCookie } from "@/lib/workspace-cookie";
 import { LoaderCircle } from "@/utils/icons/loader-circle";
+import { ViewIcon, ViewOffSlashIcon } from "@hugeicons/core-free-icons";
+import { HugeIcon } from "@/components/web/huge-icon";
 import { toast } from "sonner";
-import { Eye, EyeOff } from "lucide-react";
 import SocialLoginButtons from "./social-login-buttons";
 
 const loginSchema = z.object({
@@ -151,9 +152,9 @@ function PasswordField({
           disabled={disabled}
         >
           {showPassword ? (
-            <EyeOff className="h-4 w-4" />
+            <HugeIcon icon={ViewOffSlashIcon} className="h-4 w-4" />
           ) : (
-            <Eye className="h-4 w-4" />
+            <HugeIcon icon={ViewIcon} className="h-4 w-4" />
           )}
         </button>
       </div>
@@ -383,7 +384,7 @@ export function LoginForm({
       <Card className="mx-auto w-full border-none shadow-none">
         <CardHeader className="space-y-1">
           <CardTitle className="text-center text-xl font-medium">
-            Log in to your Slugy account
+            Sign in to Intent Host Links
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -442,32 +443,9 @@ export function LoginForm({
               lastUsedProvider={lastUsedProvider}
             />
 
-            <div className="text-center text-sm">
-              Don&apos;t have an account?{" "}
-              <Link href="/signup" className="text-primary underline">
-                Sign up
-              </Link>
-            </div>
           </form>
         </CardContent>
       </Card>
-      <div className="text-muted-foreground px-8 text-center text-xs">
-        By clicking continue, you agree to our{" "}
-        <Link
-          href="/terms"
-          className="hover:text-primary underline underline-offset-4"
-        >
-          Terms of Service
-        </Link>{" "}
-        and{" "}
-        <Link
-          href="/privacy"
-          className="hover:text-primary underline underline-offset-4"
-        >
-          Privacy Policy
-        </Link>
-        .
-      </div>
     </div>
   );
 }

@@ -12,7 +12,6 @@ import { validateUrlSafety } from "@/server/actions/url-scan";
 import { sendLinkMetadata } from "@/lib/tinybird/slugy-links-metadata";
 import { waitUntil } from "@vercel/functions";
 import { jsonWithETag } from "@/lib/http";
-import { ensureCurrentUsageRecord } from "@/lib/usage/current-usage";
 
 export async function GET(
   req: Request,
@@ -88,16 +87,7 @@ export async function GET(
     const workspace = await db.workspace.findFirst({
       where: {
         slug: context.workspaceslug,
-        OR: [
-          { userId: session.user.id },
-          {
-            members: {
-              some: {
-                userId: session.user.id,
-              },
-            },
-          },
-        ],
+        userId: session.user.id,
       },
       select: { id: true },
     });
@@ -219,7 +209,7 @@ export async function POST(
           limitInfo: {
             currentLinks: workspaceCheck.currentLinks,
             maxLinks: workspaceCheck.maxLinks,
-            planType: workspaceCheck.planType,
+            planType: "pro",
           },
         },
         { status: 403 },
@@ -296,7 +286,7 @@ export async function POST(
           limitInfo: {
             currentLinks: workspaceCheck.currentLinks,
             maxLinks: workspaceCheck.maxLinks,
-            planType: workspaceCheck.planType,
+            planType: "pro",
             attemptedToImport: records.length,
             allowedToImport: allowedToCreate,
           },
@@ -719,22 +709,9 @@ export async function POST(
 
     // Update usage counters once at the end
     if (totalCreatedCount > 0) {
-      await db.$transaction(async (tx) => {
-        const currentUsage = await ensureCurrentUsageRecord(tx, {
-          workspaceId: workspaceCheck.workspace.id,
-          userId: workspaceCheck.ownerUserId ?? session.user.id,
-        });
-
-        await Promise.all([
-          tx.workspace.update({
-            where: { id: workspaceCheck.workspace.id },
-            data: { linksUsage: { increment: totalCreatedCount } },
-          }),
-          tx.usage.update({
-            where: { id: currentUsage.id },
-            data: { linksCreated: { increment: totalCreatedCount } },
-          }),
-        ]);
+      await db.workspace.update({
+        where: { id: workspaceCheck.workspace.id },
+        data: { linksUsage: { increment: totalCreatedCount } },
       });
     }
 

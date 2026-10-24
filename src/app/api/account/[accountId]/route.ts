@@ -1,21 +1,18 @@
 import { headers } from "next/headers";
 import { revalidateTag } from "next/cache";
 import { z } from "zod";
-import * as Sentry from "@sentry/nextjs";
 import { verifyPassword } from "better-auth/crypto";
 
 import { db } from "@/server/db";
 import { auth } from "@/lib/auth";
 import { invalidateWorkspaceCache } from "@/lib/cache-utils/workspace-cache";
-import { invalidateBioCache } from "@/lib/cache-utils/bio-cache";
 import { apiSuccess, apiErrors } from "@/lib/api-response";
-import { polarClient } from "@/lib/polar";
 import { invalidateSessionPresenceCache } from "@/lib/middleware/get-session";
 import { checkAccountDeleteRateLimit } from "@/lib/middleware/rate-limit";
 import { invalidateLinkCacheBatch } from "@/lib/cache-utils/link-cache";
-import { invalidateMultipleBioPublicCache } from "@/lib/cache-utils/bio-public-cache";
 import { removeDomainFromVercel } from "@/lib/domain-utils";
 import { deleteLink as tombstoneLinkInTinybird } from "@/lib/tinybird/slugy-links-metadata";
+import * as Sentry from "@sentry/nextjs";
 
 // Constants
 const CACHE_REVALIDATION_MODE = "max";
@@ -89,8 +86,6 @@ const getRootDomain = (hostHeader: string | null): string | null => {
 
 /**
  * Clear auth cookies in a way browsers will accept.
- * Must match original cookie Path/Domain/Secure/HttpSameSite or the cookie stays.
- * crossSubDomainCookies means Domain=.slugy.co — clear both host-only and root domain.
  */
 const buildCookieClearHeaders = (req: Request): Headers => {
   const responseHeaders = new Headers();
@@ -116,9 +111,7 @@ const buildCookieClearHeaders = (req: Request): Headers => {
   };
 
   for (const cookieName of cookieNames) {
-    // Host-only clear
     appendClear(cookieName);
-    // Cross-subdomain clear (better-auth advanced.crossSubDomainCookies)
     if (rootDomain && !cookieName.startsWith("__Host-")) {
       appendClear(cookieName, rootDomain);
     }
@@ -139,89 +132,6 @@ const verifyUserDeleted = async (accountId: string): Promise<boolean> => {
   }
 };
 
-const deletePolarCustomer = async (customerId: string): Promise<void> => {
-  try {
-    await polarClient.customers.delete({ id: customerId });
-  } catch (error: unknown) {
-    // Fail CLOSED: the user row must not disappear while Polar still bills.
-    Sentry.captureException(error, {
-      tags: { flow: "account-delete", step: "polar-customer-delete" },
-      extra: { customerId },
-    });
-    throw error;
-  }
-};
-
-/**
- * Revoke every live Polar subscription for the customer, then verify none
- * remain. Fail-closed (throws) so billing can never outlive the account.
- * Already-inactive rows are tolerated for retry safety.
- */
-const revokePolarSubscriptions = async (
-  customerId: string | null,
-  knownSubscriptionIds: Array<string | null | undefined>,
-): Promise<void> => {
-  const ids = new Set<string>();
-  for (const id of knownSubscriptionIds) {
-    if (id) ids.add(id);
-  }
-
-  if (customerId) {
-    const iterator = await polarClient.subscriptions.list({
-      customerId,
-      limit: 20,
-    });
-    for await (const page of iterator) {
-      for (const item of page.result?.items ?? []) {
-        const status = item.status?.toLowerCase?.() ?? "";
-        if (item.id && (status === "active" || status === "trialing")) {
-          ids.add(item.id);
-        }
-      }
-    }
-  }
-
-  for (const id of ids) {
-    try {
-      await polarClient.subscriptions.revoke({ id });
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error);
-      // Retry-safe: revoking twice (or a remotely-ended sub) is success.
-      if (/inactive|revok|cancel|not found|does not exist/i.test(message)) {
-        continue;
-      }
-      Sentry.captureException(error, {
-        tags: { flow: "account-delete", step: "polar-subscription-revoke" },
-        extra: { customerId, subscriptionId: id },
-      });
-      throw error;
-    }
-  }
-
-  // Verify: fail closed if anything is still billable.
-  if (customerId) {
-    const iterator = await polarClient.subscriptions.list({
-      customerId,
-      limit: 20,
-    });
-    for await (const page of iterator) {
-      for (const item of page.result?.items ?? []) {
-        const status = item.status?.toLowerCase?.() ?? "";
-        if (status === "active" || status === "trialing") {
-          const error = new Error(
-            `Polar subscription still active after revoke: ${item.id}`,
-          );
-          Sentry.captureException(error, {
-            tags: { flow: "account-delete", step: "polar-revoke-verify" },
-            extra: { customerId, subscriptionId: item.id },
-          });
-          throw error;
-        }
-      }
-    }
-  }
-};
-
 const signOutUser = async (): Promise<void> => {
   try {
     await auth.api.signOut({ headers: await headers() });
@@ -230,19 +140,11 @@ const signOutUser = async (): Promise<void> => {
   }
 };
 
-/** Structured audit trail: console (ships to Vercel logs) + Sentry. */
 const auditAccountDeletion = (
   event: string,
   fields: Record<string, unknown>,
 ): void => {
   console.info(JSON.stringify({ event, ...fields }));
-  Sentry.captureMessage(`account-delete: ${event}`, {
-    level:
-      event.includes("failed") || event.includes("blocked")
-        ? "warning"
-        : "info",
-    extra: fields,
-  });
 };
 
 const captureRouteError = (
@@ -250,11 +152,7 @@ const captureRouteError = (
   step: string,
   extra?: Record<string, unknown>,
 ): void => {
-  console.error(`[Account Delete] ${step}:`, error);
-  Sentry.captureException(error, {
-    tags: { flow: "account-delete", step },
-    ...(extra ? { extra } : {}),
-  });
+  console.error(`[Account Delete] ${step}:`, error, extra);
 };
 
 /**
@@ -276,11 +174,7 @@ const deleteUserAndRelatedData = async (
         where: { userId: accountId },
         data: { userId: null },
       });
-      await tx.member.deleteMany({ where: { userId: accountId } });
       if (ownedWorkspaceIds.length > 0) {
-        await tx.usage.deleteMany({
-          where: { workspaceId: { in: ownedWorkspaceIds } },
-        });
         await tx.workspace.deleteMany({
           where: { id: { in: ownedWorkspaceIds } },
         });
@@ -308,7 +202,6 @@ const invalidateAccountCaches = async (accountId: string): Promise<void> => {
     revalidateTag("all-workspaces", CACHE_REVALIDATION_MODE),
     revalidateTag("dbuser", CACHE_REVALIDATION_MODE),
     invalidateWorkspaceCache(accountId),
-    invalidateBioCache(accountId),
   ]);
 };
 
@@ -326,7 +219,6 @@ interface DeletableAssets {
   fileKeys: string[];
   customDomains: string[];
   cloudflareHostnameIds: string[];
-  bioUsernames: string[];
 }
 
 /** Stored file fields hold R2 keys or full URLs — normalize to object keys. */
@@ -349,7 +241,7 @@ const extractR2Key = (value: string | null | undefined): string | null => {
 const collectDeletableAssets = async (
   accountId: string,
 ): Promise<DeletableAssets> => {
-  const [workspaces, links, bios, galleryImages] = await Promise.all([
+  const [workspaces, links] = await Promise.all([
     db.workspace.findMany({
       where: { userId: accountId },
       select: { id: true, slug: true, logo: true },
@@ -367,14 +259,6 @@ const collectDeletableAssets = async (
         tags: { select: { tag: { select: { id: true } } } },
       },
     }),
-    db.bio.findMany({
-      where: { userId: accountId },
-      select: { username: true, logo: true },
-    }),
-    db.bioGalleryImage.findMany({
-      where: { bio: { userId: accountId } },
-      select: { image: true },
-    }),
   ]);
 
   const ownedWorkspaceIds = workspaces.map((w) => w.id);
@@ -390,8 +274,6 @@ const collectDeletableAssets = async (
   for (const value of [
     ...workspaces.map((w) => w.logo),
     ...links.map((l) => l.image),
-    ...bios.map((b) => b.logo),
-    ...galleryImages.map((g) => g.image),
   ]) {
     const key = extractR2Key(value);
     if (key) fileKeys.add(key);
@@ -413,7 +295,6 @@ const collectDeletableAssets = async (
     cloudflareHostnameIds: customDomains
       .map((d) => d.cloudflareCustomHostnameId)
       .filter((id): id is string => Boolean(id)),
-    bioUsernames: bios.map((b) => b.username),
   };
 };
 
@@ -517,9 +398,6 @@ const cleanupExternalAssets = async (
       ...Array.from(byDomain.entries()).map(([domain, slugs]) =>
         invalidateLinkCacheBatch(slugs, domain),
       ),
-      assets.bioUsernames.length > 0
-        ? invalidateMultipleBioPublicCache(assets.bioUsernames)
-        : Promise.resolve(),
     ]);
   } catch (error) {
     captureRouteError(error, "redis-cleanup", { accountId });
@@ -567,46 +445,18 @@ export async function DELETE(req: Request, { params }: RouteParams) {
       );
     }
 
-    // Get user, providers, and billing pointers
+    // Get user and providers
     const user = await db.user.findUnique({
       where: { id: accountId },
       select: {
         id: true,
         email: true,
-        customerId: true,
         accounts: { select: { providerId: true, password: true } },
-        subscription: {
-          select: { customerId: true, subscriptionId: true },
-        },
       },
     });
 
     if (!user) {
       return apiErrors.notFound("Account not found");
-    }
-
-    // Sole-owner guard: deleting would cascade-wipe workspaces other members
-    // still use. Transfer ownership (or remove members) first.
-    const sharedOwned = await db.workspace.findMany({
-      where: {
-        userId: accountId,
-        deletedAt: null,
-        members: { some: { userId: { not: accountId } } },
-      },
-      select: {
-        slug: true,
-        _count: { select: { members: true } },
-      },
-    });
-    if (sharedOwned.length > 0) {
-      auditAccountDeletion("blocked.shared-workspaces", {
-        accountId,
-        workspaces: sharedOwned.map((w) => w.slug),
-      });
-      return apiErrors.conflict(
-        "You own workspaces with other members. Transfer ownership or remove all members before deleting your account.",
-        { workspaces: sharedOwned },
-      );
     }
 
     // Re-authentication for password accounts (stolen-session protection).
@@ -638,31 +488,7 @@ export async function DELETE(req: Request, { params }: RouteParams) {
     auditAccountDeletion("started", {
       accountId,
       email: user.email,
-      hasCustomer: Boolean(user.customerId ?? user.subscription?.customerId),
     });
-
-    // Billing FIRST and fail-closed: revoke live subscriptions, then delete
-    // the customer. Any failure aborts with 502 BEFORE touching user data.
-    const customerId = user.customerId ?? user.subscription?.customerId ?? null;
-    if (customerId || user.subscription?.subscriptionId) {
-      try {
-        await revokePolarSubscriptions(customerId, [
-          user.subscription?.subscriptionId,
-        ]);
-        if (customerId) {
-          await deletePolarCustomer(customerId);
-        }
-      } catch (error) {
-        captureRouteError(error, "billing-cleanup", {
-          accountId,
-          customerId,
-        });
-        auditAccountDeletion("failed.billing", { accountId, customerId });
-        return apiErrors.badGateway(
-          "Could not cancel billing. Your account was NOT deleted — please try again or contact support.",
-        );
-      }
-    }
 
     // Collect external-orphan pointers BEFORE the rows disappear.
     const assets = await collectDeletableAssets(accountId);

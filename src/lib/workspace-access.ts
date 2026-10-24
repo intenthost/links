@@ -62,45 +62,6 @@ export async function getWorkspaceAccess(
       };
     }
 
-    // If not owner, check if user is a member
-    const workspaceWithMember = await db.workspace.findFirst({
-      where: {
-        slug: workspaceslug,
-        deletedAt: null,
-        members: {
-          some: {
-            userId,
-          },
-        },
-      },
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        members: {
-          where: {
-            userId,
-          },
-          select: {
-            role: true,
-          },
-        },
-      },
-    });
-
-    if (workspaceWithMember && workspaceWithMember.members.length > 0) {
-      const memberRole = workspaceWithMember.members[0]!.role;
-      return {
-        success: true,
-        workspace: {
-          id: workspaceWithMember.id,
-          name: workspaceWithMember.name,
-          slug: workspaceWithMember.slug,
-        },
-        role: memberRole === "admin" ? "admin" : "member",
-      };
-    }
-
     // No access
     return {
       success: false,

@@ -6,7 +6,6 @@ import {
   BookText,
   ForwardIcon,
   CornerDownRight,
-  Share2,
   LayoutGrid,
   Smartphone,
 } from "lucide-react";
@@ -48,12 +47,8 @@ interface DescriptionTooltipProps {
 
 interface AnalyticsBadgeProps {
   clicks: number;
-  isPublic: boolean;
   pathname: string;
   slug: string;
-  onShareAnalytics: () => void;
-  /** True when the link has public analytics sharing enabled. */
-  analyticsShared?: boolean;
 }
 
 interface SelectionCheckboxProps {
@@ -157,47 +152,10 @@ export const DescriptionTooltip = ({
 // Analytics Badge Component
 export const AnalyticsBadge = ({
   clicks,
-  isPublic,
   pathname,
   slug,
-  onShareAnalytics,
-  analyticsShared,
 }: AnalyticsBadgeProps) => (
   <div className="flex items-center gap-1">
-    {analyticsShared && (
-      <>
-        <Tooltip>
-          <TooltipTrigger asChild className="">
-            <Badge
-              onClick={onShareAnalytics}
-              className="size-6 cursor-pointer rounded-md bg-transparent p-0 hover:bg-slate-100"
-            >
-              <Share2
-                size={22}
-                strokeWidth={1.5}
-                className="text-green-600 dark:text-green-500"
-              />
-            </Badge>
-          </TooltipTrigger>
-          <TooltipContent>Analytics shared publicly</TooltipContent>
-        </Tooltip>
-      </>
-    )}
-    {isPublic && !analyticsShared && (
-      <>
-        <Tooltip>
-          <TooltipTrigger asChild className="">
-            <Badge
-              onClick={onShareAnalytics}
-              className="size-6 cursor-pointer rounded-md border border-green-200 bg-green-50 p-0"
-            >
-              <Share2 size={16} strokeWidth={1.5} />
-            </Badge>
-          </TooltipTrigger>
-          <TooltipContent>Share analytics</TooltipContent>
-        </Tooltip>
-      </>
-    )}
     <Badge
       variant="outline"
       className="flex cursor-pointer items-center justify-center gap-x-1 rounded-md bg-zinc-100/50 text-sm font-normal text-zinc-700 shadow-none hover:bg-zinc-200/50 dark:bg-zinc-800 dark:text-zinc-50 dark:hover:bg-zinc-700"

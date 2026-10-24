@@ -10,8 +10,6 @@ import { validateUrlSafety } from "@/server/actions/url-scan";
 import { sendLinkMetadata } from "@/lib/tinybird/slugy-links-metadata";
 import { waitUntil } from "@vercel/functions";
 import { jsonWithETag } from "@/lib/http";
-import { ensureCurrentUsageRecord } from "@/lib/usage/current-usage";
-import { canUsePremiumLinkFeatures } from "@/lib/subscription/entitlements";
 
 const nanoid = customAlphabet(
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789",
@@ -93,7 +91,7 @@ export async function POST(
           limitInfo: {
             currentLinks: workspaceCheck.currentLinks,
             maxLinks: workspaceCheck.maxLinks,
-            planType: workspaceCheck.planType,
+            planType: "pro",
             attemptedToCreate: parsed.data.links.length,
             allowedToCreate,
           },
@@ -191,13 +189,6 @@ export async function POST(
         if (Number.isNaN(parsedDate.getTime()) || parsedDate <= new Date()) {
           rowErrors.push({
             message: "expiresAt must be a valid future date",
-            path: ["expiresAt"],
-          });
-        } else if (
-          !canUsePremiumLinkFeatures(workspaceCheck.planType as string | null)
-        ) {
-          rowErrors.push({
-            message: "Link expiration requires a Pro plan",
             path: ["expiresAt"],
           });
         } else {
@@ -420,21 +411,9 @@ export async function POST(
       });
 
       if (created.length > 0) {
-        await db.$transaction(async (tx) => {
-          const currentUsage = await ensureCurrentUsageRecord(tx, {
-            workspaceId: workspaceCheck.workspace.id,
-            userId: workspaceCheck.ownerUserId ?? session.user.id,
-          });
-          await Promise.all([
-            tx.workspace.update({
-              where: { id: workspaceCheck.workspace.id },
-              data: { linksUsage: { increment: created.length } },
-            }),
-            tx.usage.update({
-              where: { id: currentUsage.id },
-              data: { linksCreated: { increment: created.length } },
-            }),
-          ]);
+        await db.workspace.update({
+          where: { id: workspaceCheck.workspace.id },
+          data: { linksUsage: { increment: created.length } },
         });
 
         const byDomain = new Map<string, string[]>();

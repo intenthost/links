@@ -15,8 +15,6 @@ import {
   Lock,
   LoaderIcon,
 } from "lucide-react";
-import { BsStars } from "react-icons/bs";
-
 import { cn } from "@/lib/utils";
 import { validateUrlSafety } from "@/server/actions/url-scan";
 import { Button } from "@/components/ui/button";
@@ -68,7 +66,6 @@ import LinkCustomMetadata from "./link-custome-metadata";
 import type { LinkFormValues, LinkData } from "@/types/link-form";
 
 // Constants
-const AI_SLUG_ENDPOINT = "/api/ai/link-slug";
 const RANDOM_SLUG_DELAY_MS = 300;
 const DEFAULT_DOMAIN = "slugy.co";
 const SAFETY_CHECK_DEBOUNCE_MS = 800;
@@ -130,7 +127,6 @@ interface UrlValidationState {
 }
 
 interface LinkFormLocalState {
-  isAiLoading: boolean;
   isRandomLoading: boolean;
   isAddTagLoading: boolean;
   urlSafetyStatus: UrlSafetyStatus;
@@ -146,7 +142,6 @@ interface LinkFormLocalState {
 }
 
 type LinkFormAction =
-  | { type: "set_ai_loading"; payload: boolean }
   | { type: "set_random_loading"; payload: boolean }
   | { type: "set_add_tag_loading"; payload: boolean }
   | { type: "set_url_safety_status"; payload: UrlSafetyStatus }
@@ -165,8 +160,6 @@ function linkFormReducer(
   action: LinkFormAction,
 ): LinkFormLocalState {
   switch (action.type) {
-    case "set_ai_loading":
-      return { ...state, isAiLoading: action.payload };
     case "set_random_loading":
       return { ...state, isRandomLoading: action.payload };
     case "set_add_tag_loading":
@@ -202,7 +195,6 @@ function createInitialLinkFormState({
   isEditMode: boolean;
 }): LinkFormLocalState {
   return {
-    isAiLoading: false,
     isRandomLoading: false,
     isAddTagLoading: false,
     urlSafetyStatus: {
@@ -328,7 +320,6 @@ interface LinkFormMainPanelsProps {
   getValues: UseFormReturn<LinkFormValues>["getValues"];
   isEditMode: boolean;
   isSlugEditable: boolean;
-  isAiLoading: boolean;
   isRandomLoading: boolean;
   isAddTagLoading: boolean;
   isFreePlan: boolean;
@@ -346,7 +337,6 @@ interface LinkFormMainPanelsProps {
   urlSafetyStatus: UrlSafetyStatus;
   urlValidation: UrlValidationState;
   handleUrlBlur: (e: React.FocusEvent<HTMLInputElement>) => void;
-  handleAiRandomize: (rawUrl: string) => Promise<void>;
   handleRandomize: () => void;
   enableSlugEditing: () => void;
   handleDomainChange: (selectedDomain: string) => void;
@@ -379,7 +369,6 @@ const LinkFormMainPanels = ({
   getValues,
   isEditMode,
   isSlugEditable,
-  isAiLoading,
   isRandomLoading,
   isAddTagLoading,
   isFreePlan,
@@ -397,7 +386,6 @@ const LinkFormMainPanels = ({
   urlSafetyStatus,
   urlValidation,
   handleUrlBlur,
-  handleAiRandomize,
   handleRandomize,
   enableSlugEditing,
   handleDomainChange,
@@ -468,50 +456,27 @@ const LinkFormMainPanels = ({
             <Label>Short Link</Label>
             <div className="flex items-center gap-x-3">
               {isSlugEditable && (
-                <>
-                  <TooltipProvider delayDuration={200}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          onClick={() => handleAiRandomize(getValues("url"))}
-                          variant="ghost"
-                          size="icon"
-                          className="size-4 p-0"
-                          disabled={isAiLoading}
-                        >
-                          {isAiLoading ? (
-                            <Loader2 className="text-muted-foreground size-4 animate-spin" />
-                          ) : (
-                            <BsStars className="text-muted-foreground size-4" />
-                          )}
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Generate AI slug</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                  <TooltipProvider delayDuration={200}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          onClick={handleRandomize}
-                          variant="ghost"
-                          size="icon"
-                          className="text-muted-foreground size-4 p-0"
-                          disabled={isRandomLoading}
-                        >
-                          {isRandomLoading ? (
-                            <Loader2 className="size-4 animate-spin" />
-                          ) : (
-                            <Shuffle className="size-4" />
-                          )}
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Shuffle slug</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </>
+                <TooltipProvider delayDuration={200}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        onClick={handleRandomize}
+                        variant="ghost"
+                        size="icon"
+                        className="text-muted-foreground size-4 p-0"
+                        disabled={isRandomLoading}
+                      >
+                        {isRandomLoading ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : (
+                          <Shuffle className="size-4" />
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Shuffle slug</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               )}
               {isEditMode && !isSlugEditable && (
                 <TooltipProvider delayDuration={0}>
@@ -858,7 +823,6 @@ const LinkFormFields = ({
     createInitialLinkFormState,
   );
   const {
-    isAiLoading,
     isRandomLoading,
     isAddTagLoading,
     urlSafetyStatus,
@@ -974,32 +938,6 @@ const LinkFormFields = ({
     safetyCheckTimeoutRef.current = setTimeout(() => {
       checkUrlSafety(checkUrl);
     }, SAFETY_CHECK_DEBOUNCE_MS);
-  };
-
-  const handleAiRandomize = async (rawUrl: string) => {
-    if (!rawUrl) return;
-    dispatch({ type: "set_ai_loading", payload: true });
-    try {
-      const normalizedUrl = normalizeUrl(rawUrl);
-      const res = await axios.post(AI_SLUG_ENDPOINT, { url: normalizedUrl });
-      const responseData = res.data as {
-        success: true;
-        data: { slug: string };
-      };
-      if (responseData.success && responseData.data?.slug) {
-        setValue("slug", responseData.data.slug, {
-          shouldDirty: true,
-          shouldTouch: true,
-          shouldValidate: true,
-        });
-      } else {
-        console.error("Invalid response format from AI slug API");
-      }
-    } catch (error) {
-      console.error("Error generating AI slug:", error);
-    } finally {
-      dispatch({ type: "set_ai_loading", payload: false });
-    }
   };
 
   const handleRandomize = () => {
@@ -1187,7 +1125,6 @@ const LinkFormFields = ({
         getValues={getValues}
         isEditMode={isEditMode}
         isSlugEditable={isSlugEditable}
-        isAiLoading={isAiLoading}
         isRandomLoading={isRandomLoading}
         isAddTagLoading={isAddTagLoading}
         isFreePlan={isFreePlan}
@@ -1205,7 +1142,6 @@ const LinkFormFields = ({
         urlSafetyStatus={urlSafetyStatus}
         urlValidation={urlValidation}
         handleUrlBlur={handleUrlBlur}
-        handleAiRandomize={handleAiRandomize}
         handleRandomize={handleRandomize}
         enableSlugEditing={enableSlugEditing}
         handleDomainChange={handleDomainChange}

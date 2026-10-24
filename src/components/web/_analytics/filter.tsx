@@ -48,9 +48,7 @@ import CountryFlag from "./country-flag";
 import FilterSelectedButtons from "./filter-selected-buttons";
 import { useQueryState, parseAsString, parseAsArrayOf } from "nuqs";
 import { useSubscriptionStore } from "@/store/subscription";
-import { HiSparkles } from "react-icons/hi2";
-import type { AskAiResult } from "@/lib/ai/analytics-ask-prompt";
-import { triggerLabel } from "@/lib/ai/analytics-ask-prompt";
+import { triggerLabel } from "@/lib/analytics/trigger-labels";
 import {
   Tooltip,
   TooltipContent,
@@ -613,12 +611,6 @@ const FilterGroups = ({
   );
 };
 
-const ASK_AI_SUGGESTIONS = [
-  { icon: Smartphone, label: "Mobile users, US only" },
-  { icon: Chrome, label: "Tokyo, Chrome users" },
-  { icon: Flag, label: "Safari, Singapore, last month" },
-  { icon: QrCode, label: "QR scans last quarter" },
-] as const;
 
 const FilterActions = ({ filterCategories }: FilterActionsProps) => {
   const { isPro, fetchSubscription } = useSubscriptionStore();
@@ -730,15 +722,6 @@ const FilterActions = ({ filterCategories }: FilterActionsProps) => {
   const [activeCategory, setActiveCategory] = useState<CategoryId | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
-  const [filterView, setFilterView] = useState<"list" | "ask">("list");
-  const [askQuery, setAskQuery] = useState("");
-  const [askLoading, setAskLoading] = useState(false);
-  const [askError, setAskError] = useState<string | null>(null);
-  const [askQuota, setAskQuota] = useState<{
-    limit: number;
-    remaining: number;
-    isLimited: boolean;
-  } | null>(null);
 
   const selectedFilters = {
     slug_key: slugFilter,
@@ -754,170 +737,16 @@ const FilterActions = ({ filterCategories }: FilterActionsProps) => {
   };
 
   const handleTimePeriodChange = (newTimePeriod: string) => {
-    const longRangeValues = ["3m", "12m", "all"];
-    if (!isPro && longRangeValues.includes(newTimePeriod)) return;
     void setTimePeriod(newTimePeriod);
-  };
-
-  /** Apply Ask-AI result: replace filters per key, optionally switch period. */
-  const handleAskAiApply = (result: AskAiResult) => {
-    const setters: Record<CategoryId, (v: string[] | null) => void> = {
-      slug_key: (v) => void setSlugFilter(v),
-      continent_key: (v) => void setContinentFilter(v),
-      country_key: (v) => void setCountryFilter(v),
-      city_key: (v) => void setCityFilter(v),
-      browser_key: (v) => void setBrowserFilter(v),
-      os_key: (v) => void setOsFilter(v),
-      device_key: (v) => void setDeviceFilter(v),
-      referrer_key: (v) => void setReferrerFilter(v),
-      trigger_key: (v) => void setTriggerFilter(v),
-      destination_key: (v) => void setDestinationFilter(v),
-    };
-    for (const [key, values] of Object.entries(result.filters)) {
-      const setter = setters[key as CategoryId];
-      if (setter && Array.isArray(values) && values.length > 0) {
-        setter(values);
-      }
-    }
-    if (result.time_period) handleTimePeriodChange(result.time_period);
   };
 
   const handleFilterOpenChange = (open: boolean) => {
     setFilterOpen(open);
     if (!open) {
-      // Reset menu state so it always opens on the category list.
-      setFilterView("list");
       setActiveCategory(null);
       setSearchQuery("");
-      setAskQuery("");
-      setAskError(null);
     }
   };
-
-  const fetchAskQuota = async (workspaceSlug: string) => {
-    try {
-      const res = await fetch(`/api/workspace/${workspaceSlug}/analytics/ask`);
-      if (!res.ok) return;
-      const body = (await res.json()) as {
-        success: boolean;
-        data?: {
-          quota?: { limit: number; remaining: number; isLimited: boolean };
-        };
-      };
-      if (body.success && body.data?.quota) setAskQuota(body.data.quota);
-    } catch {
-      // quota badge is best-effort
-    }
-  };
-
-  const openAskView = () => {
-    setAskError(null);
-    setFilterView("ask");
-    if (askAiWorkspaceSlug) void fetchAskQuota(askAiWorkspaceSlug);
-  };
-
-  const submitAskQuery = async (rawQuestion: string) => {
-    const question = rawQuestion.trim();
-    if (!question || askLoading || !askAiWorkspaceSlug) return;
-    if (askQuota?.isLimited && askQuota.remaining <= 0) {
-      setAskError(
-        "Daily free limit reached. Upgrade to Pro for unlimited AI queries.",
-      );
-      return;
-    }
-    setAskLoading(true);
-    setAskError(null);
-    try {
-      const res = await fetch(
-        `/api/workspace/${askAiWorkspaceSlug}/analytics/ask`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            question,
-            timePeriod,
-            currentFilters: askAiCurrentFilters,
-            availableOptions: askAiAvailableOptions,
-          }),
-        },
-      );
-      const body = (await res.json()) as {
-        success: boolean;
-        error?: string;
-        data?: AskAiResult & {
-          quota?: { limit: number; remaining: number; isLimited: boolean };
-        };
-      };
-      if (!res.ok || !body.success || !body.data) {
-        if (res.status === 429) {
-          setAskError(
-            "Daily free limit reached (10/day). Upgrade to Pro for unlimited AI queries.",
-          );
-        } else {
-          setAskError(body.error || "AI request failed. Try again.");
-        }
-        return;
-      }
-      if (body.data.quota) setAskQuota(body.data.quota);
-      handleAskAiApply(body.data);
-      toast.success(body.data.explanation);
-      setFilterOpen(false);
-      setFilterView("list");
-      setAskQuery("");
-    } catch {
-      setAskError("AI request failed. Try again.");
-    } finally {
-      setAskLoading(false);
-    }
-  };
-
-  const askAiWorkspaceSlug = (() => {
-    const ws = params?.workspace ?? params?.workspaceslug ?? params?.slug;
-    return Array.isArray(ws) ? (ws[0] ?? "") : (ws ?? "");
-  })();
-
-  const askAiAvailableOptions = (() => {
-    const out: Record<string, string[]> = {};
-    for (const category of filterCategories) {
-      const values = category.options
-        .map((option) => {
-          switch (category.id) {
-            case "slug_key":
-              return (option as LinkAnalytics).slug;
-            case "continent_key":
-              return (option as ContinentAnalytics).continent;
-            case "country_key":
-              return (option as CountryAnalytics).country;
-            case "city_key":
-              return (option as CityAnalytics).city;
-            case "browser_key":
-              return (option as BrowserAnalytics).browser;
-            case "os_key":
-              return (option as OsAnalytics).os;
-            case "device_key":
-              return (option as DeviceAnalytics).device;
-            case "referrer_key":
-              return (option as ReferrerAnalytics).referrer;
-            case "trigger_key":
-              return (option as TriggerAnalytics).trigger;
-            case "destination_key":
-              return (option as DestinationAnalytics).destination;
-            default:
-              return "";
-          }
-        })
-        .filter(Boolean)
-        .slice(0, 20);
-      if (values.length > 0) out[category.id] = values;
-    }
-    return out;
-  })();
-
-  const askAiCurrentFilters = Object.fromEntries(
-    Object.entries(selectedFilters)
-      .filter(([, v]) => v.length > 0)
-      .map(([k, v]) => [k, v.join(",")]),
-  );
 
   const handleFilterChange = (categoryId: CategoryId, value: string) => {
     const current: string[] = selectedFilters[categoryId] ?? [];
@@ -1129,125 +958,33 @@ const FilterActions = ({ filterCategories }: FilterActionsProps) => {
               align="start"
               onCloseAutoFocus={(e) => e.preventDefault()}
             >
-              {filterView === "ask" ? (
-                <div className="animate-in fade-in slide-in-from-top-2 duration-200">
-                  <div className="flex items-center gap-1 border-b border-zinc-200/70 pb-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setFilterView("list");
-                        setAskError(null);
-                      }}
-                      className="rounded-md p-1 transition-colors hover:bg-zinc-100"
-                      aria-label="Back to filters"
-                    >
-                      <ChevronLeft className="h-4 w-4 text-zinc-500" />
-                    </button>
-                    <span className="text-sm text-zinc-500">Ask AI...</span>
-                    {askQuota && (
-                      <span className="ml-auto rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] text-zinc-600">
-                        {askQuota.isLimited
-                          ? `${askQuota.remaining}/${askQuota.limit} left`
-                          : "Unlimited"}
-                      </span>
-                    )}
-                  </div>
-
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      void submitAskQuery(askQuery);
-                    }}
+              <div className="mb-2 flex items-center gap-2">
+                <div
+                  className="relative flex-1"
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+                  <input
+                    type="text"
+                    placeholder="Filter..."
+                    value={searchQuery}
                     onMouseDown={(e) => e.stopPropagation()}
-                  >
-                    <input
-                      type="text"
-                      value={askQuery}
-                      onChange={(e) => setAskQuery(e.target.value)}
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onClick={(e) => e.stopPropagation()}
-                      onKeyDown={(e) => e.stopPropagation()}
-                      placeholder="Ask AI..."
-                      autoFocus
-                      autoComplete="off"
-                      aria-label="Ask AI"
-                      className="h-10 w-full border-b border-zinc-200/70 bg-transparent px-3 text-sm outline-none placeholder:text-zinc-400"
-                    />
-                  </form>
-
-                  {askLoading && (
-                    <div className="flex items-center gap-2 px-3 py-2 text-sm text-zinc-500">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Thinking...
-                    </div>
-                  )}
-
-                  {askError && (
-                    <p className="flex items-center gap-1.5 px-3 py-2 text-xs text-red-600">
-                      {(askError.includes("Upgrade") ||
-                        askError.includes("limit")) && (
-                        <Lock className="h-3 w-3 shrink-0" />
-                      )}
-                      {askError}
-                    </p>
-                  )}
-
-                  <div className="pt-1">
-                    {ASK_AI_SUGGESTIONS.map((suggestion) => (
-                      <button
-                        key={suggestion.label}
-                        type="button"
-                        disabled={askLoading}
-                        onClick={() => {
-                          setAskQuery(suggestion.label);
-                          void submitAskQuery(suggestion.label);
-                        }}
-                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-50"
-                      >
-                        <suggestion.icon className="h-4 w-4 shrink-0 text-zinc-400" />
-                        <span className="line-clamp-1">{suggestion.label}</span>
-                      </button>
-                    ))}
-                  </div>
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                    onChange={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setSearchQuery(e.target.value);
+                    }}
+                    className="h-9 w-full rounded-lg border-zinc-200 bg-zinc-50 pr-8 pl-9 text-sm focus:bg-white focus:ring-[1px] focus:outline-none"
+                    autoComplete="off"
+                    aria-label="Filter options"
+                  />
+                  <kbd className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 rounded border border-zinc-200 bg-white px-1.5 text-[10px] text-zinc-400">
+                    F
+                  </kbd>
                 </div>
-              ) : (
-                <>
-                  <div className="mb-2 flex items-center gap-2">
-                    <div
-                      className="relative flex-1"
-                      onMouseDown={(e) => e.stopPropagation()}
-                    >
-                      <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-zinc-400" />
-                      <input
-                        type="text"
-                        placeholder="Filter..."
-                        value={searchQuery}
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onClick={(e) => e.stopPropagation()}
-                        onKeyDown={(e) => e.stopPropagation()}
-                        onChange={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setSearchQuery(e.target.value);
-                        }}
-                        className="h-9 w-full rounded-lg border-zinc-200 bg-zinc-50 pr-8 pl-9 text-sm focus:bg-white focus:ring-[1px] focus:outline-none"
-                        autoComplete="off"
-                        aria-label="Filter options"
-                      />
-                      <kbd className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 rounded border border-zinc-200 bg-white px-1.5 text-[10px] text-zinc-400">
-                        F
-                      </kbd>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={openAskView}
-                    className="mb-1 flex w-full items-center gap-2.5 rounded-lg bg-zinc-100 px-3 py-2 text-left text-sm font-normal transition-colors hover:bg-zinc-200/70"
-                  >
-                    <HiSparkles className="h-4 w-4 text-zinc-500" />
-                    Ask AI
-                  </button>
+              </div>
 
                   {activeCategory ? (
                     <div className="animate-in slide-in-from-top-2 relative overflow-x-hidden duration-200">
@@ -1331,8 +1068,6 @@ const FilterActions = ({ filterCategories }: FilterActionsProps) => {
                       onCategoryClick={setActiveCategory}
                     />
                   )}
-                </>
-              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

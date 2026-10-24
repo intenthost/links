@@ -5,11 +5,11 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createAuthClient } from "better-auth/react";
 import {
-  BadgeCheck,
-  ChevronsUpDown,
-  LogOut,
-  MessagesSquare,
-} from "lucide-react";
+  UserCheck01Icon,
+  Sorting05Icon,
+  Logout01Icon,
+} from "@hugeicons/core-free-icons";
+import { HugeIcon } from "@/components/web/huge-icon";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -29,8 +29,6 @@ import {
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { signOutAndRedirect } from "@/lib/auth-client";
-import { Button } from "@/components/ui/button";
-import { useSubscriptionStore } from "@/store/subscription";
 
 // ─────────── Types ───────────
 
@@ -43,11 +41,6 @@ interface User {
 // ─────────── Hooks ───────────
 
 const { useSession } = createAuthClient();
-
-// ─────────── Component ───────────
-
-const FEEDBACK_URL =
-  "https://github.com/slugylink/slugy/discussions/categories/feedback";
 
 export const NavUser = () => {
   const { isMobile } = useSidebar();
@@ -62,7 +55,6 @@ export const NavUser = () => {
   }, [isPending, session, router]);
 
   const handleSignOut = async () => {
-    useSubscriptionStore.getState().resetSubscription();
     await signOutAndRedirect("/login");
   };
 
@@ -70,7 +62,7 @@ export const NavUser = () => {
   if (!session) return null;
 
   const user: User = {
-    name: session.user.name ?? "Anonymous",
+    name: session.user.name ?? "Intent Host",
     email: session.user.email ?? "",
     image: session.user.image ?? null,
   };
@@ -86,7 +78,7 @@ export const NavUser = () => {
             >
               <UserAvatar user={user} />
               <UserInfo user={user} />
-              <ChevronsUpDown className="ml-auto size-4" />
+              <HugeIcon icon={Sorting05Icon} className="ml-auto size-4" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
 
@@ -107,23 +99,8 @@ export const NavUser = () => {
 
             <DropdownMenuGroup>
               <DropdownMenuItem asChild className="cursor-pointer">
-                <Link
-                  href={FEEDBACK_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <MessagesSquare strokeWidth={1.5} />
-                  Feedback
-                </Link>
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-
-            <DropdownMenuSeparator />
-
-            <DropdownMenuGroup>
-              <DropdownMenuItem asChild className="cursor-pointer">
-                <Link href="/account">
-                  <BadgeCheck className="mr-2 inline-block" />
+                <Link href="/account" className="flex items-center gap-2">
+                  <HugeIcon icon={UserCheck01Icon} className="size-4" />
                   Account
                 </Link>
               </DropdownMenuItem>
@@ -133,9 +110,9 @@ export const NavUser = () => {
 
             <DropdownMenuItem
               onClick={handleSignOut}
-              className="cursor-pointer"
+              className="cursor-pointer flex items-center gap-2"
             >
-              <LogOut className="mr-2 inline-block" />
+              <HugeIcon icon={Logout01Icon} className="size-4" />
               Log out
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -177,7 +154,7 @@ const LoadingSkeleton = () => (
               <Skeleton className="h-4 w-24" />
               <Skeleton className="h-3 w-32" />
             </div>
-            <ChevronsUpDown className="text-sidebar-foreground/70 ml-auto size-4" />
+            <HugeIcon icon={Sorting05Icon} className="text-sidebar-foreground/70 ml-auto size-4" />
           </SidebarMenuButton>
         </DropdownMenuTrigger>
       </DropdownMenu>

@@ -36,17 +36,7 @@ async function getWorkspace(
     where: {
       slug: workspaceSlug,
       deletedAt: null,
-      OR: [
-        { userId },
-        {
-          members: {
-            some: {
-              userId,
-              ...(requireAdminAccess && { role: { in: ["owner", "admin"] } }),
-            },
-          },
-        },
-      ],
+      userId,
     },
   });
 
@@ -72,10 +62,7 @@ export async function GET(
     const workspace = await db.workspace.findFirst({
       where: {
         slug: workspaceslug,
-        OR: [
-          { userId: session.user.id },
-          { members: { some: { userId: session.user.id } } },
-        ],
+        userId: session.user.id,
       },
       select: {
         id: true,

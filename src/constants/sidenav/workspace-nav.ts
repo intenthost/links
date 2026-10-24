@@ -1,24 +1,20 @@
 import type { ComponentType } from "react";
-import { BarChart2, Globe, DiamondPlus, Tag } from "lucide-react";
-import { LinkIcon } from "@/utils/icons/link";
-import { PhoneIcon } from "@/utils/icons/phone";
-import { SettingsIcon } from "@/utils/icons/settings";
-
-// ============================================================================
-// Shared workspace navigation config
-//
-// Single source of truth for BOTH the sidebar (nav-main.tsx) and the page
-// header title (sidebar-header.tsx). Keeping them together means a new route
-// gets the right sidebar entry and the right header title in one edit.
-// All item URLs are relative to the workspace root; Bio Links is absolute.
-// ============================================================================
+import {
+  Link01Icon,
+  Globe02Icon,
+  Analytics01Icon,
+  Tag01Icon,
+  Settings01Icon,
+  Add01Icon,
+} from "@hugeicons/core-free-icons";
+import { createHugeIcon } from "@/components/web/huge-icon";
 
 export type WorkspaceUserRole = "owner" | "admin" | "member" | null;
 
-/** Accepts both lucide icons and the project's custom SVG icon components. */
 export type NavIcon = ComponentType<{
   className?: string;
   strokeWidth?: number;
+  size?: number;
 }>;
 
 export interface NavSubItem {
@@ -42,23 +38,24 @@ export const WORKSPACE_NAV_GROUPS: NavGroup[] = [
   {
     label: "Build",
     items: [
-      { title: "Links", url: "/", icon: LinkIcon },
-      { title: "Domains", url: "/domains", icon: Globe },
-      { title: "Bio Links", url: "/bio-links", icon: PhoneIcon },
+      { title: "Links", url: "/", icon: createHugeIcon(Link01Icon) },
+      { title: "Domains", url: "/domains", icon: createHugeIcon(Globe02Icon) },
     ],
   },
   {
     label: "Analyze",
-    items: [{ title: "Analytics", url: "/analytics", icon: BarChart2 }],
+    items: [
+      { title: "Analytics", url: "/analytics", icon: createHugeIcon(Analytics01Icon) },
+    ],
   },
   {
     label: "Organize",
     items: [
-      { title: "Tags", url: "/settings/library/tags", icon: Tag },
+      { title: "Tags", url: "/settings/library/tags", icon: createHugeIcon(Tag01Icon) },
       {
         title: "UTM Templates",
         url: "/settings/library/utm-template",
-        icon: DiamondPlus,
+        icon: createHugeIcon(Add01Icon),
       },
     ],
   },
@@ -67,13 +64,10 @@ export const WORKSPACE_NAV_GROUPS: NavGroup[] = [
     items: [
       {
         title: "Settings",
-        icon: SettingsIcon,
+        icon: createHugeIcon(Settings01Icon),
         items: [
           { title: "General", url: "/settings" },
-          { title: "Integrations", url: "/settings/integrations" },
-          { title: "Billing", url: "/settings/billing" },
           { title: "API Keys", url: "/settings/api-keys" },
-          { title: "Team", url: "/settings/team" },
         ],
       },
     ],
@@ -82,41 +76,30 @@ export const WORKSPACE_NAV_GROUPS: NavGroup[] = [
 
 export const NAV_ACCESS_CONTROL = {
   restrictedSubItems: {
-    Billing: ["owner"] as const,
     "API key": ["owner", "admin"] as const,
     "API Keys": ["owner", "admin"] as const,
     General: ["owner", "admin"] as const,
   },
 } as const;
 
-/** Routes that are not nav entries but should still title correctly. */
 const EXTRA_TITLES: Record<string, string> = {
-  upgrade: "Upgrade",
   account: "Account",
 };
 
-/** Parent landing routes (e.g. /settings/library with no trailing leaf). */
 const PARENT_TITLES: Record<string, string> = {
   library: "Library",
 };
 
-/** "General" is the workspace settings root — title it "Settings". */
 const SUB_TITLE_OVERRIDES: Record<string, string> = {
   General: "Settings",
 };
 
-/**
- * Resolve the page header title from the current pathname using the same
- * nav config the sidebar renders. Falls back to "Links" (the workspace root).
- */
 export function getWorkspacePageTitle(
   pathname: string,
   workspaceslug?: string,
 ): string {
   if (!workspaceslug) return "Links";
-  if (pathname.startsWith("/bio-links")) return "Bio Links";
 
-  // Strip the workspace prefix so paths match the relative nav URLs.
   const rest = pathname.startsWith(`/${workspaceslug}`)
     ? pathname.slice(workspaceslug.length + 1)
     : pathname;

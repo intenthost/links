@@ -1,12 +1,9 @@
-import { neon } from "@neondatabase/serverless";
+import { intentdb } from "intentdb";
 
-if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL is required");
-}
+const client = intentdb(process.env.DATABASE_URL!);
 
-export const primarySql = neon(process.env.DATABASE_URL);
-export const replicaSql = process.env.DATABASE_REPLICA_URL
-  ? neon(process.env.DATABASE_REPLICA_URL)
-  : primarySql;
+export const primarySql = client;
+export const replicaSql = client;
+export const sql = client;
+export const neon = (_url?: string) => client;
 
-export const sql = replicaSql;

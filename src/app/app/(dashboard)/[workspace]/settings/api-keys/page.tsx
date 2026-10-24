@@ -16,10 +16,7 @@ export default async function ApiKeysPage({
   const ws = await db.workspace.findFirst({
     where: {
       slug: workspace,
-      OR: [
-        { userId: session.user.id },
-        { members: { some: { userId: session.user.id } } },
-      ],
+      userId: session.user.id,
     },
     select: { id: true },
   });

@@ -256,20 +256,18 @@ export async function POST(req: Request) {
       validateUrlSafety(validatedData.url),
     ]);
 
-    // The quota check already resolves the owner's subscription and plan.
-    // Reuse it for feature and tag limits instead of querying them again.
-    const planType = limitCheck.planType ?? "free";
+    const planType = "pro";
 
     if (!limitCheck.canCreate) {
       return jsonWithETag(
         req,
         apiErrorPayload(
-          limitCheck.message || "Link limit reached. Upgrade to Pro.",
+          "Link limit reached.",
           "FORBIDDEN",
           {
-            currentLinks: limitCheck.currentCount,
-            maxLinks: limitCheck.maxLimit,
-            planType: limitCheck.planType ?? planType,
+            currentLinks: limitCheck.currentLinks,
+            maxLinks: limitCheck.maxLinks,
+            planType,
           },
         ),
         { status: 403, headers: CORS_HEADERS },
@@ -346,7 +344,7 @@ export async function POST(req: Request) {
       ? hashLinkPassword(validatedData.password)
       : null;
 
-    const maxTags = limitCheck.maxTagsPerWorkspace ?? MAX_TAGS_PER_WORKSPACE;
+    const maxTags = MAX_TAGS_PER_WORKSPACE;
 
     const linkSelect = {
       id: true,
@@ -406,7 +404,7 @@ export async function POST(req: Request) {
         {
           workspaceId: workspace.id,
           ownerUserId: workspace.userId,
-          maxLinks: limitCheck.maxLimit,
+          maxLinks: limitCheck.maxLinks,
           customSlug,
         },
         async (tx, slug) => {
@@ -447,12 +445,12 @@ export async function POST(req: Request) {
         return jsonWithETag(
           req,
           apiErrorPayload(
-            limitCheck.message || "Link limit reached. Upgrade to Pro.",
+            "Link limit reached.",
             "FORBIDDEN",
             {
-              currentLinks: limitCheck.currentCount,
-              maxLinks: limitCheck.maxLimit,
-              planType: limitCheck.planType ?? planType,
+              currentLinks: limitCheck.currentLinks,
+              maxLinks: limitCheck.maxLinks,
+              planType,
             },
           ),
           { status: 403, headers: CORS_HEADERS },

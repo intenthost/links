@@ -7,8 +7,7 @@ import {
   SidebarFooter,
   SidebarHeader,
 } from "@/components/ui/sidebar";
-import WorkspaceSwitch from "@/components/web/_workspace/workspace-switch";
-import UsageStats from "./usage-stats";
+import AppLogo from "@/components/web/app-logo";
 
 // ============================================================================
 // Types
@@ -38,11 +37,14 @@ export default function AppSidebar({
 }: AppSidebarProps) {
   return (
     <Sidebar variant="inset" collapsible="icon" {...props}>
-      <SidebarHeader>
-        <WorkspaceSwitch
-          workspaces={workspaces}
-          workspaceslug={workspaceslug}
-        />
+      <SidebarHeader className="p-3">
+        <div className="flex items-center gap-2.5 px-1 py-1.5">
+          <AppLogo />
+          <div className="grid flex-1 text-left text-sm leading-tight">
+            <span className="truncate font-semibold tracking-tight">Links</span>
+            <span className="truncate text-xs text-muted-foreground">Intent Host</span>
+          </div>
+        </div>
       </SidebarHeader>
 
       <SidebarContent className="scrollbar-thin">
@@ -50,7 +52,6 @@ export default function AppSidebar({
       </SidebarContent>
 
       <SidebarFooter>
-        <UsageStats workspaceslug={workspaceslug} />
         <NavUser />
       </SidebarFooter>
     </Sidebar>

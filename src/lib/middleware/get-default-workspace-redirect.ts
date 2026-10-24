@@ -1,4 +1,4 @@
-import { neon } from "@neondatabase/serverless";
+import { neon } from "@/server/neon";
 import type { NextRequest } from "next/server";
 
 import { hashKey, redis } from "@/lib/redis";
@@ -101,20 +101,15 @@ async function lookupDefaultWorkspaceSlug(
   if (!databaseUrl) return null;
 
   const sql = neon(databaseUrl);
-  // Owned default first, then any owned workspace, then member workspaces —
-  // invited-only users must land in their workspace, not onboarding.
   const rows = await sql`
     SELECT w.slug
-    FROM workspace w
-    LEFT JOIN member m
-      ON m."workspaceId" = w.id AND m."userId" = ${userId}
-    WHERE (w."userId" = ${userId} OR m."userId" = ${userId})
+    FROM workspaces w
+    WHERE w."userId" = ${userId}
       AND w."deletedAt" IS NULL
     ORDER BY
       CASE
-        WHEN w."userId" = ${userId} AND w."isDefault" = true THEN 0
-        WHEN w."userId" = ${userId} THEN 1
-        ELSE 2
+        WHEN w."isDefault" = true THEN 0
+        ELSE 1
       END,
       w."createdAt" ASC
     LIMIT 1
@@ -175,11 +170,9 @@ export async function validateWorkspaceSlugForUser(
     const sql = neon(databaseUrl);
     const rows = await sql`
       SELECT w.slug
-      FROM workspace w
-      LEFT JOIN member m
-        ON m."workspaceId" = w.id AND m."userId" = ${userId}
+      FROM workspaces w
       WHERE w.slug = ${slug}
-        AND (w."userId" = ${userId} OR m."userId" = ${userId})
+        AND w."userId" = ${userId}
         AND w."deletedAt" IS NULL
       LIMIT 1
     `;
@@ -204,7 +197,7 @@ export async function resolveDefaultWorkspaceRedirect(
 
     const cached = await readCachedSlug(userId);
     if (cached === MW_REDIRECT_NONE) {
-      return { status: "onboarding" };
+      return { status: "fallback" };
     }
     if (typeof cached === "string" && cached.length > 0) {
       return { status: "redirect", slug: cached };
@@ -216,8 +209,7 @@ export async function resolveDefaultWorkspaceRedirect(
       return { status: "redirect", slug };
     }
 
-    await writeCachedSlug(userId, MW_REDIRECT_NONE);
-    return { status: "onboarding" };
+    return { status: "fallback" };
   } catch (error) {
     if (process.env.NODE_ENV === "development") {
       console.error("Middleware default workspace lookup failed:", error);

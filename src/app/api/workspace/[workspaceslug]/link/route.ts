@@ -278,19 +278,17 @@ export async function POST(
     if (!workspaceCheck.canCreateLinks) {
       return jsonWithETag(
         req,
-        apiErrorPayload("Link limit reached. Upgrade to Pro.", "FORBIDDEN", {
+        apiErrorPayload("Link limit reached.", "FORBIDDEN", {
           currentLinks: workspaceCheck.currentLinks,
           maxLinks: workspaceCheck.maxLinks,
-          planType: workspaceCheck.planType,
+          planType: "pro",
         }),
         { status: 403 },
       );
     }
 
     const geo = (validatedData.geo ?? null) as GeoTargetMap | null;
-    // Prefer the plan resolved alongside the limit check (that call also
-    // auto-provisions Free for legacy users, so this is never stale).
-    const effectivePlanType = workspaceCheck.planType ?? planType;
+    const effectivePlanType = "pro";
 
     if (geo && !canUseGeoTargeting(effectivePlanType)) {
       return jsonWithETag(
@@ -390,20 +388,7 @@ export async function POST(
       ? hashLinkPassword(validatedData.password)
       : null;
 
-    // Plan tag cap resolves before creation — tags now persist synchronously.
-    const ownerPlan = await db.plan.findFirst({
-      where: {
-        planType:
-          (workspaceCheck.planType as
-            | "free"
-            | "basic"
-            | "pro"
-            | "growth"
-            | "premium") ?? "free",
-      },
-      select: { maxTagsPerWorkspace: true },
-    });
-    const maxTags = ownerPlan?.maxTagsPerWorkspace ?? MAX_TAGS_PER_WORKSPACE;
+    const maxTags = MAX_TAGS_PER_WORKSPACE;
 
     const linkSelect = {
       id: true,
@@ -463,7 +448,7 @@ export async function POST(
       const created = await createLinkWithQuota(
         {
           workspaceId: workspaceCheck.workspace.id,
-          ownerUserId: workspaceCheck.ownerUserId ?? session.user.id,
+          ownerUserId: workspaceCheck.workspace.userId ?? session.user.id,
           maxLinks: workspaceCheck.maxLinks,
           customSlug,
         },
@@ -503,10 +488,10 @@ export async function POST(
       if (error instanceof QuotaExceededError) {
         return jsonWithETag(
           req,
-          apiErrorPayload("Link limit reached. Upgrade to Pro.", "FORBIDDEN", {
+          apiErrorPayload("Link limit reached.", "FORBIDDEN", {
             currentLinks: workspaceCheck.currentLinks,
             maxLinks: workspaceCheck.maxLinks,
-            planType: workspaceCheck.planType,
+            planType: "pro",
           }),
           { status: 403 },
         );

@@ -1,6 +1,7 @@
 "use client";
 
-import { ChevronRight } from "lucide-react";
+import { ArrowRight01Icon } from "@hugeicons/core-free-icons";
+import { HugeIcon } from "@/components/web/huge-icon";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -158,7 +159,10 @@ const NavItemComponent = memo<{
               {item.icon && <item.icon className="size-4" strokeWidth={2} />}
               <span className="text-sm font-normal">{item.title}</span>
               {item.items && (
-                <ChevronRight className="ml-auto size-4 transition-all duration-200 group-hover/menu-item:translate-x-0.5 group-data-[state=open]/collapsible:rotate-90" />
+                <HugeIcon
+                  icon={ArrowRight01Icon}
+                  className="ml-auto size-4 transition-all duration-200 group-hover/menu-item:translate-x-0.5 group-data-[state=open]/collapsible:rotate-90"
+                />
               )}
             </SidebarMenuButton>
           </CollapsibleTrigger>

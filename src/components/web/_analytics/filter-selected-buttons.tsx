@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { X } from "lucide-react";
 import Image from "next/image";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -20,8 +21,7 @@ import type {
   TriggerAnalytics,
   DestinationAnalytics,
 } from "@/types/filter-actions";
-import { triggerLabel } from "@/lib/ai/analytics-ask-prompt";
-import { useState } from "react";
+import { triggerLabel } from "@/lib/analytics/trigger-labels";
 
 interface FilterSelectedButtonsProps {
   filterCategories: FilterCategory[];

@@ -198,7 +198,7 @@ export async function queryWorkspaceLinks(
     ...link,
     password: maskLinkPassword(link.password),
     geo: parseGeoFromCache(link.geo),
-    isAnalyticsShared: link.SharedAnalytics?.isPublic ?? false,
+    isAnalyticsShared: false,
   }));
 
   return toJsonSafe({

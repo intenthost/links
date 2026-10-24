@@ -95,10 +95,7 @@ export async function getAnalytics(
         link: {
           workspace: {
             slug: safeProps.workspaceslug,
-            OR: [
-              { userId: session.user.id },
-              { members: { some: { userId: session.user.id } } },
-            ],
+            userId: session.user.id,
           },
           ...(safeProps.slug_key ? { slug: safeProps.slug_key } : {}),
           ...(safeProps.destination_key

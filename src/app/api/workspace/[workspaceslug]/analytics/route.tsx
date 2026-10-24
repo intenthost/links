@@ -105,11 +105,11 @@ function getStartDate(period: TimePeriod): Date {
 
 // Helper function to build filter conditions with better performance
 function buildFilterConditions(filters: Record<string, string>) {
-  const conditions: ReturnType<typeof sql>[] = [];
+  const conditions: any[] = [];
 
   const append = (
     value: string | undefined,
-    clause: (bound: string) => ReturnType<typeof sql>,
+    clause: (bound: string) => any,
   ) => {
     const trimmed = value?.trim();
     if (trimmed) conditions.push(clause(trimmed));
@@ -148,7 +148,7 @@ function timeBucketExpr(periodUnit: string) {
 // Optimized query for specific metrics with better error handling
 async function fetchMetricData(
   metric: AnalyticsMetric,
-  baseWhereClause: ReturnType<typeof sql>,
+  baseWhereClause: any,
   periodUnit: string,
 ) {
   try {

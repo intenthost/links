@@ -1,4 +1,3 @@
-import { getPolarServer } from "@/lib/polar-config";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { nextCookies } from "better-auth/next-js";
@@ -6,15 +5,11 @@ import { APIError } from "better-auth/api";
 import { hashPassword } from "better-auth/crypto";
 import { headers } from "next/headers";
 import { cache } from "react";
-import { magicLink, admin, organization } from "better-auth/plugins";
+import { magicLink, admin } from "better-auth/plugins";
 import { db } from "@/server/db";
-import { sendEmail, sendOrganizationInvitation } from "@/server/actions/email";
-import { polar, checkout } from "@polar-sh/better-auth";
-import { Polar } from "@polar-sh/sdk";
+import { sendEmail } from "@/server/actions/email";
 import { origins } from "@/constants/origins";
 import { templates } from "@/constants/email-templates";
-
-let _polarClientAuth: Polar | null = null;
 
 const getAppBaseUrl = () =>
   process.env.NEXT_APP_URL ||
@@ -101,16 +96,6 @@ const resolveTokenFromUrl = (rawUrl: string) => {
     const tokenMatch = rawUrl.match(/\/reset-password\/([^?]+)/);
     return tokenMatch?.[1] ?? null;
   }
-};
-
-const getPolarClient = () => {
-  if (!_polarClientAuth) {
-    _polarClientAuth = new Polar({
-      accessToken: process.env.POLAR_ACCESS_TOKEN || "",
-      server: getPolarServer(),
-    });
-  }
-  return _polarClientAuth;
 };
 
 const authCookieDomain = getAuthCookieDomain();
@@ -212,34 +197,12 @@ export const auth = betterAuth({
 
         await sendEmail({
           to: email,
-          subject: "Sign in to slugy",
-          text: `You requested a magic link to sign in to your slugy account. Click the following link to log in: ${url}`,
+          subject: "Sign in to Links",
+          text: `You requested a magic link to sign in to your Links account. Click the following link to log in: ${url}`,
           html: htmlTemplate,
         });
       },
       expiresIn: 300, // 5 minutes
-    }),
-    polar({
-      client: getPolarClient(),
-      createCustomerOnSignUp: false,
-      use: [
-        checkout({
-          products: [],
-        }),
-      ],
-    }),
-    organization({
-      allowUserToCreateOrganization: true,
-      async sendInvitationEmail(data) {
-        const inviteLink = `${process.env.NEXT_APP_URL}/accept-invitation/${data.id}`;
-        await sendOrganizationInvitation({
-          email: data.email,
-          invitedByUsername: data.inviter.user.name,
-          invitedByEmail: data.inviter.user.email,
-          teamName: data.organization.name,
-          inviteLink,
-        });
-      },
     }),
     admin(),
     nextCookies(),

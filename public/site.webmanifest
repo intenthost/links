@@ -1,17 +1,12 @@
 {
-  "name": "Slugy - Short Links with Powerful Analytics",
-  "short_name": "Slugy",
-  "description": "The open-source link management platform. Branded links, analytics, QR codes and link-in-bio.",
+  "name": "Intent Host Links",
+  "short_name": "Links",
+  "description": "Minimal, high-performance link management by Intent Host.",
   "icons": [
     {
-      "src": "/android-chrome-192x192.png",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "/android-chrome-512x512.png",
-      "sizes": "512x512",
-      "type": "image/png"
+      "src": "/favicon.ico",
+      "sizes": "any",
+      "type": "image/x-icon"
     }
   ],
   "theme_color": "#ffffff",

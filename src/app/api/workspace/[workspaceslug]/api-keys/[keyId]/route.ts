@@ -8,7 +8,7 @@ async function getWorkspaceForUser(workspaceslug: string, userId: string) {
     where: {
       slug: workspaceslug,
       deletedAt: null,
-      OR: [{ userId }, { members: { some: { userId } } }],
+      userId,
     },
     select: { id: true, userId: true },
   });

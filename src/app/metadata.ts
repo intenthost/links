@@ -13,9 +13,9 @@ const OG_IMAGE_URL = "https://files.slugy.co/slugy-og.png";
 // Outcome-led, but keeps the "short link" head term so it still reads as a
 // category match in search and on link previews. The differentiator is that
 // Slugy attributes revenue, not just clicks — see hero.tsx for the same angle.
-const TITLE = "Slugy — Short Links That Track Revenue, Not Just Clicks";
+const TITLE = "Links — Intent Host";
 const DESCRIPTION =
-  "Open-source link analytics that tracks revenue, not just clicks. Branded short links, custom domains, QR codes and a free UTM builder — no enterprise pricing.";
+  "Minimal, high-performance link management and analytics by Intent Host.";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -30,16 +30,16 @@ export const metadata: Metadata = {
   metadataBase: new URL(BASE_URL),
   title: {
     default: TITLE,
-    template: "%s | Slugy",
+    template: "%s | Intent Host Links",
   },
   description: DESCRIPTION,
-  applicationName: "Slugy",
+  applicationName: "Intent Host Links",
   authors: [
-    { name: "Slugy Team", url: BASE_URL },
-    { name: "Sandip Sarkar", url: "https://imsandip.in/" },
+    { name: "Subh Mondal", url: "https://subhmondal.com" },
+    { name: "Intent Host", url: "https://intenthost.com" },
   ],
-  creator: "Slugy Team",
-  publisher: "Slugy",
+  creator: "Intent Host",
+  publisher: "Intent Host",
   category: "Technology",
   referrer: "origin-when-cross-origin",
   keywords: [
@@ -47,73 +47,29 @@ export const metadata: Metadata = {
     "short links",
     "link management",
     "link analytics",
-    "revenue analytics",
-    "link revenue tracking",
-    "link-in-bio",
     "custom domains",
-    "open source URL shortener",
-    "free UTM builder",
-    "QR code generator",
     "branded links",
   ],
-  robots: {
-    index: true,
-    follow: true,
-    googleBot: {
-      index: true,
-      follow: true,
-      "max-video-preview": -1,
-      "max-image-preview": "large",
-      "max-snippet": -1,
-    },
-  },
   icons: {
     icon: [
+      { url: "https://cdn.intenthost.com/assets/brand/favicon.ico", sizes: "any" },
       { url: "/favicon.ico", sizes: "any" },
-      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
-      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
     ],
     apple: [
-      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+      { url: "https://cdn.intenthost.com/assets/brand/favicon.ico" },
     ],
-  },
-  manifest: "/site.webmanifest",
-  appleWebApp: {
-    capable: true,
-    title: "Slugy",
-    statusBarStyle: "default",
-  },
-  formatDetection: {
-    telephone: false,
   },
   openGraph: {
     type: "website",
-    siteName: "Slugy",
+    siteName: "Intent Host Links",
     title: TITLE,
     description: DESCRIPTION,
     url: BASE_URL,
     locale: "en_US",
-    images: [
-      {
-        url: OG_IMAGE_URL,
-        width: 1200,
-        height: 630,
-        alt: "Slugy — short link analytics showing clicks, leads and revenue",
-        type: "image/png",
-      },
-    ],
   },
   twitter: {
-    card: "summary_large_image",
-    site: "@slugydotco",
-    creator: "@slugydotco",
+    card: "summary",
     title: TITLE,
     description: DESCRIPTION,
-    images: [
-      {
-        url: OG_IMAGE_URL,
-        alt: "Slugy — short link analytics showing clicks, leads and revenue",
-      },
-    ],
   },
 };

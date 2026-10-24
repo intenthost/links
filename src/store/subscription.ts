@@ -55,79 +55,22 @@ function applySubscription(
 }
 
 export const useSubscriptionStore = create<SubscriptionStoreState>(
-  (set, get) => {
-    let inFlight: Promise<void> | null = null;
-    return {
-      subscription: null,
-      planType: null,
-      isPro: false,
-      isGrowth: false,
-      isLoading: false,
-      error: null,
-      hasFetched: false,
-
-      resetSubscription() {
-        set({
-          subscription: null,
-          planType: null,
-          isPro: false,
-          isGrowth: false,
-          isLoading: false,
-          error: null,
-          hasFetched: false,
-        });
+  (set) => ({
+    subscription: {
+      status: "active",
+      plan: {
+        id: "premium-plan",
+        name: "Premium",
+        planType: "premium",
       },
-
-      async fetchSubscription() {
-        const { hasFetched, isLoading } = get();
-        if (hasFetched) return;
-        if (inFlight) return inFlight;
-        if (isLoading) return;
-
-        set({ isLoading: true, error: null });
-
-        inFlight = (async () => {
-          try {
-            const checkoutId =
-              typeof window === "undefined"
-                ? null
-                : new URLSearchParams(window.location.search).get("checkoutId");
-            const subscriptionUrl = checkoutId
-              ? `/api/subscription/active?checkoutId=${encodeURIComponent(checkoutId)}`
-              : "/api/subscription/active";
-
-            const res = await fetch(subscriptionUrl, {
-              credentials: "include",
-              cache: "no-store",
-            });
-
-            if (!res.ok) {
-              throw new Error("Failed to load subscription");
-            }
-
-            const data = (await res.json()) as {
-              subscription?: ActiveSubscription | null;
-            };
-
-            applySubscription(set, data.subscription ?? null);
-          } catch {
-            // Do not default to "basic": the upgrade popup treats that as unpaid.
-            set({
-              subscription: null,
-              planType: null,
-              isPro: false,
-              isGrowth: false,
-              hasFetched: true,
-              isLoading: false,
-              error: "Failed to load subscription",
-            });
-          } finally {
-            inFlight = null;
-          }
-        })();
-
-        return inFlight;
-      },
-    };
-  },
+    },
+    planType: "premium",
+    isPro: true,
+    isGrowth: true,
+    isLoading: false,
+    error: null,
+    hasFetched: true,
+    fetchSubscription: async () => {},
+    resetSubscription: () => {},
+  }),
 );

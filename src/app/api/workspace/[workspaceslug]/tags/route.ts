@@ -35,14 +35,7 @@ export async function POST(
     const workspace = await db.workspace.findFirst({
       where: {
         slug: context.workspaceslug,
-        OR: [
-          { userId: session.user.id },
-          {
-            members: {
-              some: { userId: session.user.id },
-            },
-          },
-        ],
+        userId: session.user.id,
       },
       select: {
         id: true,
@@ -125,14 +118,7 @@ export async function GET(
     const workspace = await db.workspace.findFirst({
       where: {
         slug: context.workspaceslug,
-        OR: [
-          { userId: session.user.id },
-          {
-            members: {
-              some: { userId: session.user.id },
-            },
-          },
-        ],
+        userId: session.user.id,
       },
       select: {
         id: true,

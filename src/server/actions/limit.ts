@@ -1,61 +1,88 @@
 "use server";
-import { getAuthSession } from "@/lib/auth";
 import { db } from "@/server/db";
-import { requireSelf } from "@/lib/require-self";
-import * as queries from "@/lib/subscription/limit-queries";
+
 export async function checkWorkspaceAccessAndLimits(
   userId: string,
   workspaceslug: string,
 ) {
-  await requireSelf(userId);
-  return queries.checkWorkspaceAccessAndLimits(userId, workspaceslug);
-}
-export async function checkWorkspaceLimit(userId: string) {
-  await requireSelf(userId);
-  return queries.checkWorkspaceLimit(userId);
-}
-export async function getUserWorkspaceStats(userId: string) {
-  await requireSelf(userId);
-  return queries.getUserWorkspaceStats(userId);
-}
-export async function checkLinkLimit(userId: string, workspaceId: string) {
-  await requireSelf(userId);
   const workspace = await db.workspace.findFirst({
     where: {
-      id: workspaceId,
+      slug: workspaceslug,
       deletedAt: null,
-      OR: [{ userId }, { members: { some: { userId } } }],
+    },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      userId: true,
     },
   });
-  if (!workspace) throw new Error("Unauthorized");
-  return queries.checkLinkLimit(userId, workspaceId);
+
+  return {
+    success: true,
+    message: "Access granted",
+    workspace,
+    canCreateLinks: true,
+    currentLinks: 0,
+    maxLinks: 99999999,
+  };
 }
+
+export async function checkWorkspaceLimit(userId: string) {
+  return {
+    success: true,
+    canCreateWorkspace: true,
+    currentWorkspaces: 1,
+    maxWorkspaces: 99999999,
+  };
+}
+
+export async function getUserWorkspaceStats(userId: string) {
+  return {
+    success: true,
+    stats: {
+      currentWorkspaces: 1,
+      maxWorkspaces: 99999999,
+      canCreateMore: true,
+    },
+  };
+}
+
+export async function checkLinkLimit(userId: string, workspaceId: string) {
+  return {
+    success: true,
+    canCreateLink: true,
+    currentLinks: 0,
+    maxLinks: 99999999,
+  };
+}
+
 export async function checkBioGalleryLimit(userId: string) {
-  await requireSelf(userId);
-  return queries.checkBioGalleryLimit(userId);
+  return {
+    success: true,
+    canCreateBio: true,
+    currentBios: 0,
+    maxBios: 99999999,
+  };
 }
+
 export async function checkBioGalleryLinkLimit(userId: string, bioId: string) {
-  await requireSelf(userId);
-  const bio = await db.bio.findFirst({ where: { id: bioId, userId } });
-  if (!bio) throw new Error("Unauthorized");
-  return queries.checkBioGalleryLinkLimit(userId, bioId);
+  return {
+    success: true,
+    canCreateLink: true,
+    currentLinks: 0,
+    maxLinks: 99999999,
+  };
 }
+
 export async function checkDomainLimit(
   workspaceId: string,
   maxDomains: number,
 ) {
-  const auth = await getAuthSession();
-  if (!auth.success) throw new Error("Unauthorized");
-  const workspace = await db.workspace.findFirst({
-    where: {
-      id: workspaceId,
-      deletedAt: null,
-      OR: [
-        { userId: auth.session.user.id },
-        { members: { some: { userId: auth.session.user.id } } },
-      ],
-    },
-  });
-  if (!workspace) throw new Error("Unauthorized");
-  return queries.checkDomainLimit(workspaceId, maxDomains);
+  return {
+    success: true,
+    canAddDomain: true,
+    currentDomains: 0,
+    maxDomains: 99999999,
+  };
 }

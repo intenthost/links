@@ -1,40 +1,13 @@
 import { PrismaClient } from "@prisma/client";
-import { PrismaNeon } from "@prisma/adapter-neon";
-import { neonConfig } from "@neondatabase/serverless";
-import ws from "ws";
-import { readReplicas } from "@prisma/extension-read-replicas";
-
-// Neon WebSocket config for Node.js (once)
-neonConfig.webSocketConstructor = ws;
-// HTTP queries avoid a WebSocket handshake on each serverless invocation.
-neonConfig.poolQueryViaFetch = true;
+import { PrismaIntentDB } from "./intentdb-adapter";
 
 declare global {
   var prisma: PrismaClient | undefined;
 }
 
 function createPrismaClient(): PrismaClient {
-  const adapter = new PrismaNeon({
-    connectionString: process.env.DATABASE_URL!,
-  });
-
-  let client = new PrismaClient({ adapter, log: ["error"] });
-
-  if (process.env.DATABASE_REPLICA_URL) {
-    const replicaAdapter = new PrismaNeon({
-      connectionString: process.env.DATABASE_REPLICA_URL,
-    });
-    const replicaClient = new PrismaClient({
-      adapter: replicaAdapter,
-      log: ["error"],
-    });
-
-    client = client.$extends(
-      readReplicas({ replicas: [replicaClient] }),
-    ) as unknown as PrismaClient;
-  }
-
-  return client;
+  const adapter = new PrismaIntentDB(process.env.DATABASE_URL);
+  return new PrismaClient({ adapter, log: ["error"] });
 }
 
 export const db: PrismaClient = globalThis.prisma ?? createPrismaClient();

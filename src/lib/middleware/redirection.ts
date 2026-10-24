@@ -12,7 +12,6 @@ import { redis } from "@/lib/redis";
 import { getClientIp } from "@/lib/middleware/client-ip";
 import { checkRedirectMissRateLimit } from "@/lib/middleware/rate-limit";
 import { recordLinkClick } from "@/lib/analytics/record-click";
-import { recordBioClick } from "@/lib/analytics/record-bio-click";
 import { resolveTargetUrl } from "@/lib/link-targeting";
 import { createClickId } from "@/lib/leads/generate-click-id";
 import {
@@ -652,10 +651,6 @@ export async function URLRedirects(
                 trigger,
                 clickId,
               ),
-              // ?bio=<id> attributes bio-page clicks; validated inside.
-              bioLinkId
-                ? recordBioClick({ bioLinkId, linkId: linkData.linkId! })
-                : Promise.resolve({ ok: false }),
             ]);
           })(),
         );

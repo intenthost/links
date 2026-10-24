@@ -1,6 +1,6 @@
-import { withSentryConfig } from "@sentry/nextjs";
+import type { NextConfig } from "next";
 
-const nextConfig: import("next").NextConfig = {
+const nextConfig: NextConfig = {
   reactCompiler: true,
   allowedDevOrigins: ["oxidize-ashen-pastel.ngrok-free.dev"],
 
@@ -46,12 +46,7 @@ const nextConfig: import("next").NextConfig = {
       { hostname: "images.prismic.io" },
       { hostname: "api.microlink.io" },
 
-      // Custom domains
-      { hostname: "assets.sandipsarkar.dev" },
-      { hostname: "assets.slugy.co" },
-      { hostname: "slugy.co" },
-      { hostname: "slugylink.github.io" },
-      { hostname: "i.postimg.cc" },
+      { hostname: "cdn.intenthost.com" },
     ],
   },
 
@@ -144,16 +139,4 @@ const nextConfig: import("next").NextConfig = {
   },
 };
 
-export default withSentryConfig(nextConfig, {
-  org: "slugy",
-  project: "javascript-nextjs",
-  silent: !process.env.CI,
-  widenClientFileUpload: true,
-  tunnelRoute: "/monitoring",
-  webpack: {
-    automaticVercelMonitors: true,
-    treeshake: {
-      removeDebugLogging: true,
-    },
-  },
-});
+export default nextConfig;

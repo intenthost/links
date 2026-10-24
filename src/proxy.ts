@@ -318,15 +318,6 @@ async function redirectAuthenticatedUserToWorkspace(
     return redirectToWorkspace(result.slug, baseUrl, search, redirectStatus);
   }
 
-  if (result.status === "onboarding") {
-    return addSecurityHeaders(
-      NextResponse.redirect(
-        new URL(`/onboarding/welcome${search}`, baseUrl),
-        redirectStatus,
-      ),
-    );
-  }
-
   return null;
 }
 
@@ -472,6 +463,7 @@ async function handleRootDomain(
       }
       return redirectTo(appUrl.toString(), redirectStatus);
     }
+    return redirectTo(new URL("/login", req.url).toString(), redirectStatus);
   }
 
   if (pathname.startsWith("/api/") || isStaticAsset(pathname)) {

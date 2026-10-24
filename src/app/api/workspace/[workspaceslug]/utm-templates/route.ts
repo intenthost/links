@@ -58,14 +58,7 @@ export async function POST(
       where: {
         slug: context.workspaceslug,
         deletedAt: null,
-        OR: [
-          { userId: session.user.id },
-          {
-            members: {
-              some: { userId: session.user.id },
-            },
-          },
-        ],
+        userId: session.user.id,
       },
       select: {
         id: true,
@@ -180,14 +173,7 @@ export async function GET(
       where: {
         slug: context.workspaceslug,
         deletedAt: null,
-        OR: [
-          { userId: session.user.id },
-          {
-            members: {
-              some: { userId: session.user.id },
-            },
-          },
-        ],
+        userId: session.user.id,
       },
       select: {
         id: true,

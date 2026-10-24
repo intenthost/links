@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
-import Navbar from "../(root)/_components/navbar";
-import Footer from "../(root)/_components/footer";
 
-// Infra route with site chrome, never indexed (see /features/custom-domains).
+// Infra route with site chrome, never indexed (custom domain parked page).
 export const metadata: Metadata = {
   robots: {
     index: false,
@@ -15,11 +13,5 @@ export default function CustomDomainLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return (
-    <>
-      <Navbar />
-      {children}
-      <Footer />
-    </>
-  );
+  return <>{children}</>;
 }

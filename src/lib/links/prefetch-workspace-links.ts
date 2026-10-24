@@ -34,16 +34,7 @@ export async function prefetchWorkspaceLinks(
   if (!workspace) return null;
 
   if (workspace.userId !== authResult.session.user.id) {
-    const member = await db.member.findUnique({
-      where: {
-        workspaceId_userId: {
-          workspaceId: workspace.id,
-          userId: authResult.session.user.id,
-        },
-      },
-      select: { id: true },
-    });
-    if (!member) return null;
+    return null;
   }
 
   const page = Math.max(1, Number(input.pageNo ?? 1) || 1);
