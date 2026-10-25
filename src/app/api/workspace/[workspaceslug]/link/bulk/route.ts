@@ -167,12 +167,6 @@ export async function POST(
           path: ["slug"],
         });
       }
-      if (item.slug?.trim() && item.slug.trim().length < 3) {
-        rowErrors.push({
-          message: "Slug must be at least 3 characters if provided",
-          path: ["slug"],
-        });
-      }
       const batchKey = `${domain}/${slug.toLowerCase()}`;
       if (seenInBatch.has(batchKey)) {
         rowErrors.push({

@@ -59,10 +59,7 @@ const createLinkSchema = z
     slug: z
       .string()
       .max(50)
-      .optional()
-      .refine((val) => !val || val.length === 0 || val.length >= 3, {
-        message: "Slug must be at least 3 characters if provided",
-      }),
+      .optional(),
     image: z.string().url().optional().nullable(),
     title: z.string().max(100).optional().nullable(),
     description: z.string().max(500).optional().nullable(),
