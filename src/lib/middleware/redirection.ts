@@ -32,7 +32,7 @@ const UNKNOWN_VALUE = "unknown";
 // Prefetch/bots are filtered before this runs.
 const RATE_LIMIT_WINDOW_SECONDS = 2;
 const RATE_LIMIT_KEY_PREFIX = "rate_limit:analytics";
-const DEFAULT_DOMAIN = "slugy.co";
+const DEFAULT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "";
 
 interface AnalyticsData {
   ipAddress: string;

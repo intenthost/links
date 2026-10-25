@@ -16,7 +16,7 @@ const nanoid = customAlphabet(
   7,
 );
 
-const DEFAULT_DOMAIN = "slugy.co";
+const DEFAULT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "";
 const MAX_BULK_CREATE = 100;
 
 const bulkLinkSchema = z.object({

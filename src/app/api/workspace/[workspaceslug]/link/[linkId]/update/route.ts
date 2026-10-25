@@ -31,7 +31,7 @@ import {
 } from "@/lib/subscription/entitlements";
 import { Prisma } from "@prisma/client";
 
-const DEFAULT_DOMAIN = "slugy.co";
+const DEFAULT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "";
 
 function geoMapsEqual(
   a: GeoTargetMap | null | undefined,

@@ -13,6 +13,7 @@ import {
   applyWorkspaceCookie,
   getWorkspaceCookie,
   workspaceSlugFromPath,
+  RESERVED_APP_SEGMENTS,
 } from "@/lib/workspace-cookie";
 
 import {
@@ -261,9 +262,28 @@ export async function proxy(req: NextRequest): Promise<NextResponse> {
         return rewriteTo(`${adminPath}${url.search}`, req.url);
       }
 
-      case ROOT_DOMAIN:
-        // links.intenthost.com IS the app — no separate app. subdomain needed.
+      case ROOT_DOMAIN: {
+        // If this is a candidate short link (single non-reserved segment, e.g. /xxx),
+        // try URLRedirects first. If a redirect is found, execute it immediately.
+        const segments = pathname.split("/").filter(Boolean);
+        const firstSegment = segments[0];
+        const isAppPath =
+          pathname === "/" ||
+          isPublicPath(pathname) ||
+          AUTH_PATHS.has(pathname) ||
+          (firstSegment && RESERVED_APP_SEGMENTS.has(firstSegment));
+
+        if (!isAppPath && segments.length === 1) {
+          const rootDomainRedirect = await handleRootDomain(url, req);
+          // If handleRootDomain resolved to a redirect, return it
+          if (rootDomainRedirect.status >= 300 && rootDomainRedirect.status < 400) {
+            return rootDomainRedirect;
+          }
+        }
+
+        // links.intenthost.com IS also the app
         return handleAppSubdomain(url, req, req.url);
+      }
 
       default:
         return handleCustomDomain(url, hostname, req.url, req);

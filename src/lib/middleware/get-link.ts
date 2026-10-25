@@ -9,7 +9,7 @@ import { parseGeoFromCache, type GeoTargetMap } from "@/lib/link-targeting";
 
 const SLUG_REGEX = /^[a-zA-Z0-9_-]+$/;
 const MAX_SLUG_LENGTH = 50;
-const DEFAULT_DOMAIN = "slugy.co";
+const DEFAULT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "";
 
 export interface GetLinkResult {
   success: boolean;

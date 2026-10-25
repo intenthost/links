@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/server/db";
-import { getAuthSession } from "@/lib/auth";
 import {
   validateDomain,
   isDomainInUse,
@@ -17,13 +16,23 @@ import { jsonWithETag } from "@/lib/http";
 import { getWorkspaceAccess, hasRole } from "@/lib/workspace-access";
 import { checkDomainVerifyRateLimit } from "@/lib/middleware/rate-limit";
 
+import { auth } from "@/lib/auth";
+import { headers } from "next/headers";
+
 // Helper: Get authenticated session
-async function getSession() {
-  const authResult = await getAuthSession();
-  if (!authResult.success) {
+async function getSession(req?: NextRequest) {
+  let session = await auth.api.getSession({
+    headers: await headers(),
+  });
+  if (!session && req) {
+    session = await auth.api.getSession({
+      headers: req.headers,
+    });
+  }
+  if (!session) {
     throw new Error("Unauthorized");
   }
-  return authResult.session;
+  return session;
 }
 
 // Helper: Get workspace with access check
@@ -56,7 +65,7 @@ export async function GET(
   { params }: { params: Promise<{ workspaceslug: string }> },
 ) {
   try {
-    const session = await getSession();
+    const session = await getSession(req);
     const { workspaceslug } = await params;
 
     const workspace = await db.workspace.findFirst({

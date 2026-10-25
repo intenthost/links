@@ -8,7 +8,7 @@ export const WORKSPACE_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
 const WORKSPACE_SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
-const RESERVED_APP_SEGMENTS = new Set([
+export const RESERVED_APP_SEGMENTS = new Set([
   "login",
   "signup",
   "forgot-password",
