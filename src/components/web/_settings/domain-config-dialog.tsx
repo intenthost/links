@@ -289,10 +289,10 @@ export function DomainConfigContent({ domain }: DomainConfigContentProps) {
   const dnsRecords = getDnsRecords(domain.domain);
   const verificationRecord: VerificationRecord | null = domain.verificationToken
     ? {
-        type: "TXT",
-        name: "_cloudflare",
-        value: domain.verificationToken,
-      }
+      type: "TXT",
+      name: "_cloudflare",
+      value: domain.verificationToken,
+    }
     : null;
 
   return (

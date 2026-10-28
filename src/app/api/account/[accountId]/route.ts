@@ -265,9 +265,9 @@ const collectDeletableAssets = async (
   const customDomains =
     ownedWorkspaceIds.length > 0
       ? await db.customDomain.findMany({
-          where: { workspaceId: { in: ownedWorkspaceIds } },
-          select: { domain: true, cloudflareCustomHostnameId: true },
-        })
+        where: { workspaceId: { in: ownedWorkspaceIds } },
+        select: { domain: true, cloudflareCustomHostnameId: true },
+      })
       : [];
 
   const fileKeys = new Set<string>();
