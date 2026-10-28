@@ -24,7 +24,7 @@ const SIZE_CLASSES = {
 } as const;
 
 const MIN_FAVICON_PX = 16;
-const FALLBACK_AVATAR = "https://avatar.vercel.sh";
+const FALLBACK_AVATAR = "https://api.dicebear.com/7.x/identicon/svg?seed=";
 const GOOGLE_FAVICON = "https://www.google.com/s2/favicons";
 
 const CONTAINER_CLASSES =
@@ -45,11 +45,11 @@ function isLocalHost(domain: string): boolean {
 function faviconSources(domain: string): string[] {
   const encoded = encodeURIComponent(domain);
   if (!domain || isLocalHost(domain)) {
-    return [`${FALLBACK_AVATAR}/${encoded}?size=32`];
+    return [`${FALLBACK_AVATAR}${encoded}`];
   }
   return [
     `${GOOGLE_FAVICON}?domain=${encoded}&sz=64`,
-    `${FALLBACK_AVATAR}/${encoded}?size=32`,
+    `${FALLBACK_AVATAR}${encoded}`,
   ];
 }
 

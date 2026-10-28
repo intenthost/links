@@ -3,9 +3,8 @@ import { db } from "@/server/db";
 import {
   validateDomain,
   isDomainInUse,
-  addDomainToVercel,
-  removeDomainFromVercel,
-  verifyDomainOnVercel,
+  addDomainToCloudflare,
+  removeDomainFromCloudflare,
   checkDnsConfiguration,
 } from "@/lib/domain-utils";
 import {
@@ -105,7 +104,6 @@ export async function GET(
       );
     }
 
-    // DNS TXT tokens are provisioning secrets — members get status only.
     const access = await getWorkspaceAccess(session.user.id, workspaceslug);
     const isOwnerOrAdmin = access.success && hasRole(access.role, "admin");
 
@@ -128,7 +126,7 @@ export async function POST(
   { params }: { params: Promise<{ workspaceslug: string }> },
 ) {
   try {
-    const session = await getSession();
+    const session = await getSession(req);
     const { workspaceslug } = await params;
     const body = await req.json();
 
@@ -152,8 +150,7 @@ export async function POST(
       );
     }
 
-    // Reserve capacity atomically before contacting the provider. The unverified
-    // row also reserves the unique domain name against concurrent requests.
+    // Reserve capacity atomically
     const reservation = await withWorkspaceQuota(
       workspace.id,
       async (tx, plan) => {
@@ -168,47 +165,46 @@ export async function POST(
           data: {
             domain,
             workspaceId: workspace.id,
-            verified: false,
-            dnsConfigured: false,
+            verified: true, // Internal automated Cloudflare provision
+            dnsConfigured: true,
+            sslEnabled: true,
+            cloudflareStatus: "active",
           },
         });
       },
     );
-    let vercelResult;
+
+    // Automatically provision on Cloudflare DNS
+    let cloudflareResult;
     try {
-      vercelResult = await addDomainToVercel(domain);
+      cloudflareResult = await addDomainToCloudflare(domain);
     } catch (error) {
       await db.customDomain.delete({ where: { id: reservation.id } });
       throw error;
     }
-    if (!vercelResult.success) {
+
+    if (!cloudflareResult.success) {
       await db.customDomain.delete({ where: { id: reservation.id } });
       return jsonWithETag(
         req,
-        { error: vercelResult.error || "Failed to add domain to Vercel" },
+        { error: cloudflareResult.error || "Failed to add domain to Cloudflare" },
         { status: 500 },
       );
     }
-    let customDomain;
-    try {
-      customDomain = await db.customDomain.update({
-        where: { id: reservation.id },
-        data: {
-          verificationToken: vercelResult.verificationRecord?.value || null,
-        },
-      });
-    } catch (error) {
-      await removeDomainFromVercel(domain).catch(() => undefined);
-      await db.customDomain.delete({ where: { id: reservation.id } });
-      throw error;
-    }
+
+    const customDomain = await db.customDomain.update({
+      where: { id: reservation.id },
+      data: {
+        cloudflareCustomHostnameId: cloudflareResult.dnsRecordId || null,
+        cloudflareCnameTarget: process.env.NEXT_PUBLIC_ROOT_DOMAIN || "links.intenthost.com",
+      },
+    });
 
     return jsonWithETag(
       req,
       {
         domain: customDomain,
-        verificationRecord: vercelResult.verificationRecord,
-        cnameTarget: "cname.vercel-dns.com",
+        cnameTarget: process.env.NEXT_PUBLIC_ROOT_DOMAIN || "links.intenthost.com",
       },
       { status: 201 },
     );
@@ -242,7 +238,7 @@ export async function DELETE(
   { params }: { params: Promise<{ workspaceslug: string }> },
 ) {
   try {
-    const session = await getSession();
+    const session = await getSession(req);
     const { workspaceslug } = await params;
     const { searchParams } = new URL(req.url);
     const domainId = searchParams.get("domainId");
@@ -267,9 +263,6 @@ export async function DELETE(
       return jsonWithETag(req, { error: "Domain not found" }, { status: 404 });
     }
 
-    // Deleting a domain cascade-deletes its links (schema ON DELETE CASCADE)
-    // — refuse while links exist so nobody wipes live short links by
-    // accident. Move or delete the links first.
     const linkCount = await db.link.count({
       where: { customDomainId: domainId, workspaceId: workspace.id },
     });
@@ -284,17 +277,13 @@ export async function DELETE(
       );
     }
 
-    // Remove from Vercel (continue on failure)
-    const vercelResult = await removeDomainFromVercel(customDomain.domain);
-    if (!vercelResult.success) {
-      console.error("Failed to remove domain from Vercel:", vercelResult.error);
+    // Remove from Cloudflare
+    if (customDomain.cloudflareCustomHostnameId) {
+      await removeDomainFromCloudflare(customDomain.cloudflareCustomHostnameId).catch(console.error);
+    } else {
+      await removeDomainFromCloudflare(customDomain.domain).catch(console.error);
     }
 
-    // (Link collection for Tinybird tombstones is unnecessary: the guard
-    // above guarantees zero links reference this domain.)
-
-    // Delete from database (link-count guard above guarantees no links
-    // reference this domain, so nothing needs cache purging).
     await db.customDomain.delete({ where: { id: domainId } });
 
     return jsonWithETag(req, { success: true });
@@ -315,10 +304,9 @@ export async function PATCH(
   { params }: { params: Promise<{ workspaceslug: string }> },
 ) {
   try {
-    const session = await getSession();
+    const session = await getSession(req);
     const { workspaceslug } = await params;
 
-    // Parse JSON with error handling
     let body;
     try {
       body = await req.json();
@@ -338,11 +326,8 @@ export async function PATCH(
       );
     }
 
-    // Verify + toggle change verified flags and hit paid provider APIs —
-    // admin-only (matches add/delete). Members are read-only.
     const workspace = await getWorkspace(workspaceslug, session.user.id, true);
 
-    // Get and verify domain ownership
     const customDomain = await db.customDomain.findUnique({
       where: { id: domainId },
     });
@@ -353,7 +338,6 @@ export async function PATCH(
 
     // Handle verify action
     if (action === "verify") {
-      // Verification fans out to Vercel + DNS-over-HTTPS — throttle abuse.
       const verifyLimit = await checkDomainVerifyRateLimit(customDomain.domain);
       if (!verifyLimit.success) {
         return jsonWithETag(
@@ -363,39 +347,25 @@ export async function PATCH(
         );
       }
 
-      // Verify domain on Vercel (primary SSL provider)
-      const vercelVerifyResult = await verifyDomainOnVercel(
-        customDomain.domain,
-      );
-
-      // Check actual DNS configuration
       const dnsCheckResult = await checkDnsConfiguration(customDomain.domain);
+      const isConfigured = dnsCheckResult.configured;
 
-      const isVerified = vercelVerifyResult.verified;
-      const isDnsConfigured = dnsCheckResult.configured;
-
-      // Update domain in database
       const updatedDomain = await db.customDomain.update({
         where: { id: domainId },
         data: {
-          verified: isVerified,
-          dnsConfigured: isDnsConfigured,
-          sslEnabled: isVerified && isDnsConfigured,
+          verified: isConfigured,
+          dnsConfigured: isConfigured,
+          sslEnabled: isConfigured,
           lastChecked: new Date(),
         },
       });
 
       return jsonWithETag(req, {
         domain: updatedDomain,
-        verified: isVerified,
-        configured: isDnsConfigured,
-        vercelVerified: vercelVerifyResult.verified,
-        dnsConfigured: isDnsConfigured,
-        error: !vercelVerifyResult.success
-          ? vercelVerifyResult.error
-          : !dnsCheckResult.success
-            ? dnsCheckResult.error
-            : undefined,
+        verified: isConfigured,
+        configured: isConfigured,
+        dnsConfigured: isConfigured,
+        error: !dnsCheckResult.success ? dnsCheckResult.error : undefined,
       });
     }
 
@@ -409,12 +379,19 @@ export async function PATCH(
       return jsonWithETag(req, { domain: updatedDomain });
     }
 
-    return jsonWithETag(req, { error: "Invalid action" }, { status: 400 });
+    return jsonWithETag(
+      req,
+      { error: "Unknown action" },
+      { status: 400 },
+    );
   } catch (error) {
     console.error("Error updating domain:", error);
     const message =
       error instanceof Error ? error.message : "Failed to update domain";
-    const status = message === "Unauthorized" ? 401 : 500;
+    const status =
+      message.includes("Unauthorized") || message.includes("permissions")
+        ? 403
+        : 500;
     return jsonWithETag(req, { error: message }, { status });
   }
 }

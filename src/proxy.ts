@@ -227,7 +227,7 @@ export async function proxy(req: NextRequest): Promise<NextResponse> {
       return addSecurityHeaders(NextResponse.next());
     }
 
-    // HTTPS redirect (should be early) - Vercel handles SSL for custom domains
+    // HTTPS redirect (should be early)
     if (IS_PRODUCTION && req.headers.get("x-forwarded-proto") !== "https") {
       const httpsURL = new URL(req.url);
       httpsURL.protocol = "https:";

@@ -90,7 +90,7 @@ const WorkspaceLogoForm = ({
               />
             ) : (
               <Image
-                src={`https://avatar.vercel.sh/${initialData.slug}`}
+                src={`https://api.dicebear.com/7.x/identicon/svg?seed=${initialData.slug}`}
                 alt="Default Workspace Logo"
                 fill
                 className="object-cover"

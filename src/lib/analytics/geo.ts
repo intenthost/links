@@ -331,35 +331,15 @@ export interface GeoData {
 }
 
 /**
- * Single source of truth for visitor geolocation.
- *
- * Important: when Cloudflare proxies in front of Vercel, Vercel's
- * `x-vercel-ip-*` headers describe Cloudflare's edge PoP — not the visitor.
- * So behind Cloudflare (`cf-ray` present) we only trust Cloudflare headers
- * and derive the rest, instead of storing a confidently-wrong city.
+ * Single source of truth for visitor geolocation via Cloudflare headers.
  */
 export function getGeoData(req: NextRequest): GeoData {
   const headers = req.headers;
-  const hasCloudflare = Boolean(headers.get("cf-ray"));
 
-  const country = normalizeCountry(
-    headers.get("cf-ipcountry") ??
-      (hasCloudflare ? null : headers.get("x-vercel-ip-country")),
-  );
-
-  const city = decodeCity(
-    headers.get("cf-ipcity") ??
-      (hasCloudflare ? null : headers.get("x-vercel-ip-city")),
-  );
-
+  const country = normalizeCountry(headers.get("cf-ipcountry"));
+  const city = decodeCity(headers.get("cf-ipcity"));
   const continent = normalizeContinent(headers.get("cf-ipcontinent"), country);
-
-  const region =
-    (
-      headers.get("cf-region") ??
-      (hasCloudflare ? null : headers.get("x-vercel-ip-country-region")) ??
-      ""
-    ).trim() || UNKNOWN_GEO_VALUE;
+  const region = (headers.get("cf-region") ?? "").trim() || UNKNOWN_GEO_VALUE;
 
   return { country, city, continent, region };
 }

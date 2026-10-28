@@ -10,7 +10,7 @@ import { apiSuccess, apiErrors } from "@/lib/api-response";
 import { invalidateSessionPresenceCache } from "@/lib/middleware/get-session";
 import { checkAccountDeleteRateLimit } from "@/lib/middleware/rate-limit";
 import { invalidateLinkCacheBatch } from "@/lib/cache-utils/link-cache";
-import { removeDomainFromVercel } from "@/lib/domain-utils";
+import { removeDomainFromCloudflare } from "@/lib/domain-utils";
 import { deleteLink as tombstoneLinkInTinybird } from "@/lib/tinybird/slugy-links-metadata";
 import * as Sentry from "@sentry/nextjs";
 
@@ -326,19 +326,18 @@ const cleanupExternalAssets = async (
     }
   }
 
-  // Vercel project domains must be detached (no Cloudflare hostname helper
-  // exists — those ids are Sentry-logged below for manual removal).
+  // Cloudflare domains detached on account delete
   for (const domain of assets.customDomains) {
     try {
-      const result = await removeDomainFromVercel(domain);
+      const result = await removeDomainFromCloudflare(domain);
       if (!result.success) {
-        Sentry.captureMessage("account-delete: vercel domain removal failed", {
+        Sentry.captureMessage("account-delete: cloudflare domain removal failed", {
           level: "warning",
           extra: { accountId, domain, error: result.error },
         });
       }
     } catch (error) {
-      captureRouteError(error, "vercel-domain-removal", {
+      captureRouteError(error, "cloudflare-domain-removal", {
         accountId,
         domain,
       });

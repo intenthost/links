@@ -5,8 +5,7 @@ import { Check, Copy } from "lucide-react";
 import { toast } from "sonner";
 
 // Constants
-const VERCEL_CNAME_TARGET = "cname.vercel-dns.com";
-const VERCEL_A_RECORD_IP = "76.76.21.21";
+const CLOUDFLARE_CNAME_TARGET = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "links.intenthost.com";
 const COPY_FEEDBACK_DURATION = 2000;
 
 // Types
@@ -46,16 +45,16 @@ const getDnsRecords = (domain: string): DnsRecord[] => {
   if (isApexDomain(domain)) {
     return [
       {
-        type: "A",
+        type: "CNAME",
         name: "@",
-        value: VERCEL_A_RECORD_IP,
-        description: "Points your apex domain to Vercel",
+        value: CLOUDFLARE_CNAME_TARGET,
+        description: "Points your domain to Cloudflare Edge Proxy",
       },
       {
         type: "CNAME",
         name: "www",
-        value: VERCEL_CNAME_TARGET,
-        description: "Points www subdomain to Vercel",
+        value: CLOUDFLARE_CNAME_TARGET,
+        description: "Points www subdomain to Cloudflare Edge Proxy",
       },
     ];
   }
@@ -64,8 +63,8 @@ const getDnsRecords = (domain: string): DnsRecord[] => {
     {
       type: "CNAME",
       name: domain.split(".")[0] || "@",
-      value: VERCEL_CNAME_TARGET,
-      description: "Points your subdomain to Vercel (SSL handled by Vercel)",
+      value: CLOUDFLARE_CNAME_TARGET,
+      description: "Points your subdomain to Cloudflare (Automated SSL & Edge routing)",
     },
   ];
 };
@@ -291,7 +290,7 @@ export function DomainConfigContent({ domain }: DomainConfigContentProps) {
   const verificationRecord: VerificationRecord | null = domain.verificationToken
     ? {
         type: "TXT",
-        name: "_vercel",
+        name: "_cloudflare",
         value: domain.verificationToken,
       }
     : null;

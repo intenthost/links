@@ -1,182 +1,60 @@
 import { db } from "@/server/db";
-
-const VERCEL_API_URL = "https://api.vercel.com";
+import {
+  addDomainToCloudflareDns,
+  removeDomainFromCloudflareDns,
+  checkCloudflareDnsStatus,
+} from "./cloudflare-dns";
 
 interface ApiResult {
   success: boolean;
   error?: string;
 }
 
-// Helper: Get Vercel credentials
-function getVercelCredentials() {
-  const token =
-    process.env.VERCEL_TOKEN || process.env.CLOUD_API_TOKEN;
-  const projectId =
-    process.env.VERCEL_PROJECT_ID || process.env.PROJECT_ID;
-  const teamId =
-    process.env.VERCEL_TEAM_ID || process.env.TEAM_ID;
-
-  if (!token || !projectId || !teamId) {
-    throw new Error("Vercel credentials not configured");
-  }
-
-  return { token, projectId, teamId };
-}
-
 /**
- * Add a custom domain to Vercel project
+ * Add a custom domain automatically to Cloudflare DNS with edge proxy & SSL.
  */
-export async function addDomainToVercel(domain: string): Promise<{
+export async function addDomainToCloudflare(domain: string): Promise<{
   success: boolean;
   error?: string;
-  verificationRecord?: { type: string; name: string; value: string };
+  dnsRecordId?: string;
 }> {
   try {
-    const { token, projectId, teamId } = getVercelCredentials();
-
-    const response = await fetch(
-      `${VERCEL_API_URL}/v10/projects/${projectId}/domains?teamId=${teamId}`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ name: domain }),
-      },
-    );
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      return {
-        success: false,
-        error: data.error?.message || "Failed to add domain to Vercel",
-      };
-    }
-
-    // Get verification record if domain needs verification
-    const txtRecord = data.verification?.find(
-      (v: { type: string; domain: string; value: string }) => v.type === "TXT",
-    );
-
-    return {
-      success: true,
-      verificationRecord: txtRecord
-        ? {
-            type: txtRecord.type,
-            name: txtRecord.domain,
-            value: txtRecord.value,
-          }
-        : undefined,
-    };
+    const res = await addDomainToCloudflareDns(domain);
+    return res;
   } catch (error) {
-    console.error("Error adding domain to Vercel:", error);
+    console.error("Error adding domain to Cloudflare:", error);
     return {
       success: false,
       error:
         error instanceof Error
           ? error.message
-          : "Failed to add domain to Vercel",
+          : "Failed to add domain to Cloudflare",
     };
   }
 }
 
 /**
- * Remove a domain from Vercel project
+ * Remove a domain from Cloudflare DNS
  */
-export async function removeDomainFromVercel(
-  domain: string,
+export async function removeDomainFromCloudflare(
+  dnsRecordId: string,
 ): Promise<ApiResult> {
   try {
-    const { token, projectId, teamId } = getVercelCredentials();
-
-    const response = await fetch(
-      `${VERCEL_API_URL}/v9/projects/${projectId}/domains/${domain}?teamId=${teamId}`,
-      {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      },
-    );
-
-    if (!response.ok) {
-      const data = await response.json();
-      return {
-        success: false,
-        error: data.error?.message || "Failed to remove domain from Vercel",
-      };
-    }
-
-    return { success: true };
+    return await removeDomainFromCloudflareDns(dnsRecordId);
   } catch (error) {
-    console.error("Error removing domain from Vercel:", error);
+    console.error("Error removing domain from Cloudflare:", error);
     return {
       success: false,
       error:
         error instanceof Error
           ? error.message
-          : "Failed to remove domain from Vercel",
+          : "Failed to remove domain from Cloudflare",
     };
   }
 }
 
 /**
- * Verify domain on Vercel
- */
-export async function verifyDomainOnVercel(domain: string): Promise<{
-  success: boolean;
-  verified: boolean;
-  error?: string;
-}> {
-  try {
-    const { token, projectId, teamId } = getVercelCredentials();
-
-    const response = await fetch(
-      `${VERCEL_API_URL}/v9/projects/${projectId}/domains/${domain}/verify?teamId=${teamId}`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      },
-    );
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      return {
-        success: false,
-        verified: false,
-        error: data.error?.message || "Failed to verify domain on Vercel",
-      };
-    }
-
-    return {
-      success: true,
-      verified: data.verified || false,
-    };
-  } catch (error) {
-    console.error("Error verifying domain on Vercel:", error);
-    return {
-      success: false,
-      verified: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to verify domain on Vercel",
-    };
-  }
-}
-
-/**
- * Check if domain DNS actually points at Vercel, via two independent
- * signals: Vercel's own domain config (authoritative for SSL/verification
- * state) and a DNS-over-HTTPS CNAME lookup (authoritative for routing).
- * The old HEAD-request heuristic treated ANY http<500 as "configured" — a
- * domain pointed at an arbitrary server passed verification.
+ * Check if domain DNS resolves and is configured on Cloudflare
  */
 export async function checkDnsConfiguration(domain: string): Promise<{
   success: boolean;
@@ -184,94 +62,7 @@ export async function checkDnsConfiguration(domain: string): Promise<{
   error?: string;
 }> {
   try {
-    const { token, projectId, teamId } = getVercelCredentials();
-
-    // Signal 1: Vercel domain config (misconfigured => DNS/SSL not ready).
-    let vercelMisconfigured: boolean | null = null;
-    try {
-      const configRes = await fetch(
-        `${VERCEL_API_URL}/v6/domains/${encodeURIComponent(domain)}/config?teamId=${teamId}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-          signal: AbortSignal.timeout(10000),
-        },
-      );
-      if (configRes.ok) {
-        const config = (await configRes.json()) as {
-          misconfigured?: boolean;
-        };
-        if (typeof config.misconfigured === "boolean") {
-          vercelMisconfigured = config.misconfigured;
-        }
-      }
-    } catch {
-      // Fall through to DNS-only verdict below.
-    }
-
-    // Signal 2: real CNAME target via DNS-over-HTTPS.
-    let cnameOk = false;
-    try {
-      const dohRes = await fetch(
-        `https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=CNAME`,
-        { signal: AbortSignal.timeout(10000) },
-      );
-      if (dohRes.ok) {
-        const doh = (await dohRes.json()) as {
-          Answer?: Array<{ type: number; data: string }>;
-        };
-        cnameOk = (doh.Answer ?? []).some(
-          (answer) =>
-            answer.type === 5 &&
-            /(^|\.)vercel-dns\.com\.?$/i.test(answer.data.trim()),
-        );
-      }
-    } catch {
-      // DNS lookup failed — not configured.
-    }
-
-    // Apex domains use A records instead of CNAME; accept Vercel's anycast IP.
-    let apexOk = false;
-    if (!cnameOk) {
-      try {
-        const dohRes = await fetch(
-          `https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=A`,
-          { signal: AbortSignal.timeout(10000) },
-        );
-        if (dohRes.ok) {
-          const doh = (await dohRes.json()) as {
-            Answer?: Array<{ type: number; data: string }>;
-          };
-          apexOk = (doh.Answer ?? []).some(
-            (answer) =>
-              answer.type === 1 && answer.data.trim() === "76.76.21.21",
-          );
-        }
-      } catch {
-        // ignore
-      }
-    }
-
-    const dnsPointsToVercel = cnameOk || apexOk;
-
-    if (vercelMisconfigured === true) {
-      return {
-        success: true,
-        configured: false,
-        error:
-          "Vercel reports this domain as misconfigured. Point its CNAME to cname.vercel-dns.com (or apex A record to 76.76.21.21).",
-      };
-    }
-
-    if (!dnsPointsToVercel) {
-      return {
-        success: true,
-        configured: false,
-        error:
-          "DNS does not point to Vercel yet. Add a CNAME to cname.vercel-dns.com (or apex A record to 76.76.21.21) and retry.",
-      };
-    }
-
-    return { success: true, configured: true };
+    return await checkCloudflareDnsStatus(domain);
   } catch (error) {
     return {
       success: false,

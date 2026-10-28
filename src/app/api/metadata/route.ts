@@ -25,7 +25,6 @@ function getClientIP(req: NextRequest): string {
   return normalizeIp(
     (hasCloudflare ? req.headers.get("cf-connecting-ip") : null) ||
       req.headers.get("x-real-ip") ||
-      req.headers.get("x-vercel-forwarded-for")?.split(",")[0]?.trim() ||
       hops?.[hops.length - 1] ||
       "unknown",
   );

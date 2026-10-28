@@ -9,7 +9,6 @@ const nextConfig: NextConfig = {
     minimumCacheTTL: 86400,
     remotePatterns: [
       // CDN and storage services
-      { hostname: "public.blob.vercel-storage.com" },
       { hostname: "res.cloudinary.com" },
       { hostname: "zplink.s3.ap-south-1.amazonaws.com" },
       { hostname: "files.slugy.co" },
@@ -27,7 +26,6 @@ const nextConfig: NextConfig = {
       { hostname: "pbs.twimg.com" },
 
       // Avatar and profile services
-      { hostname: "avatar.vercel.sh" },
       { hostname: "avatars.githubusercontent.com" },
       { hostname: "lh3.googleusercontent.com" },
       { hostname: "api.dicebear.com" },
@@ -40,7 +38,6 @@ const nextConfig: NextConfig = {
 
       // External services
       { hostname: "www.google.com" },
-      { hostname: "flag.vercel.app" },
       { hostname: "flagcdn.com" },
       { hostname: "illustrations.popsy.co" },
       { hostname: "images.prismic.io" },

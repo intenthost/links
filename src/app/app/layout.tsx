@@ -1,7 +1,6 @@
 import { ThemeProvider } from "@/components/theme-provider";
 import type { Metadata } from "next";
 import React from "react";
-import { SpeedInsights } from "@vercel/speed-insights/next";
 import { cn } from "@/lib/utils";
 import { Geist, Geist_Mono } from "next/font/google";
 
@@ -31,7 +30,6 @@ const AppLayout = ({ children }: RootLayoutProps) => {
     <div className={cn("min-h-screen", geistSans.variable, geistMono.variable)}>
       <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
         <div className="h-full">{children}</div>
-        <SpeedInsights />
       </ThemeProvider>
     </div>
   );
