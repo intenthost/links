@@ -18,17 +18,17 @@ function createMockPipeline() {
 
 export const redis = (redisUrl && redisToken)
   ? new Redis({
-      url: redisUrl,
-      token: redisToken,
-    })
+    url: redisUrl,
+    token: redisToken,
+  })
   : (new Proxy({} as Redis, {
-      get: (_target, prop) => {
-        if (prop === "pipeline" || prop === "multi") {
-          return createMockPipeline;
-        }
-        return async () => null;
-      },
-    }) as unknown as Redis);
+    get: (_target, prop) => {
+      if (prop === "pipeline" || prop === "multi") {
+        return createMockPipeline;
+      }
+      return async () => null;
+    },
+  }) as unknown as Redis);
 
 export const CACHE_BASE_TTL = 60 * 60 * 23; // 23 hours, in seconds
 export const CACHE_TTL_JITTER = 60 * Math.floor(Math.random() * 10); // [0, 9] minutes jitter
