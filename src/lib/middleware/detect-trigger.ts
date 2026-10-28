@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { METADATA_BOT_PATTERNS } from "./bot-patterns";
+import { extractSocialPlatform } from "@/lib/social-platforms";
 
 export type TriggerType =
   | "bot"
@@ -155,6 +156,12 @@ export function detectTrigger(
   // Email detection
   if (isEmailReferer(refererHost) || getParam("utm_medium") === "email") {
     return "email";
+  }
+
+  // Social tracking query param detection (?=x, ?x, ?=ig, ?=in, etc.)
+  const socialInfo = extractSocialPlatform(req.nextUrl.search);
+  if (socialInfo) {
+    return "social";
   }
 
   // Social media detection (header first — actual click location wins)

@@ -16,7 +16,6 @@ export async function handleCustomDomainRequest(
   const hostNoPort = hostname.split(":")[0].toLowerCase();
 
   if (
-    pathname === "/" ||
     pathname.startsWith("/api/") ||
     pathname.startsWith("/_next/") ||
     pathname.startsWith("/static/") ||
@@ -25,7 +24,13 @@ export async function handleCustomDomainRequest(
     return null;
   }
 
-  if (!shortCode) {
+  // Handle root URL ("/") for custom domains
+  if (pathname === "/" || !shortCode) {
+    // Check if there is a root link configured (e.g. slug "", "_root", or "@")
+    for (const rootSlug of ["", "_root", "@"]) {
+      const rootRedirect = await URLRedirects(req, rootSlug, hostNoPort);
+      if (rootRedirect) return rootRedirect;
+    }
     return null;
   }
 

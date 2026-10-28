@@ -531,18 +531,13 @@ async function handleCustomDomain(
 ): Promise<NextResponse> {
   const { pathname } = url;
 
-  if (pathname === "/") {
-    return rewriteTo("/custom-domain", baseUrl);
-  }
-
   // API routes serve normally on custom hosts (e.g. the password gate POSTs
   // to /api/redirect/:slug) — per-route auth/rate limits still apply.
   if (pathname.startsWith("/api/")) {
     return addSecurityHeaders(NextResponse.next());
   }
 
-  // Custom-domain lookup failures degrade to the branded not-found page,
-  // never to the outer catch's /login redirect.
+  // Custom-domain lookup (handles both root "/" if configured and short-link slugs)
   try {
     const customDomainResponse = await handleCustomDomainRequest(req, hostname);
     if (customDomainResponse) {
@@ -550,6 +545,11 @@ async function handleCustomDomain(
     }
   } catch (error) {
     console.error("Error handling custom domain request:", error);
+  }
+
+  // If root URL on custom domain has no specific redirect, show the connected parked page
+  if (pathname === "/") {
+    return rewriteTo("/custom-domain", baseUrl);
   }
 
   return rewriteTo("/custom-domain/not-found", baseUrl);

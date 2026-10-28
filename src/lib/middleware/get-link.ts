@@ -73,6 +73,7 @@ const parseCookies = (cookieHeader: string | null): Record<string, string> => {
 };
 
 const isValidSlug = (slug: string): boolean => {
+  if (slug === "" || slug === "@" || slug === "_root") return true;
   return Boolean(
     slug &&
       slug.length > 0 &&

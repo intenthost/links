@@ -34,6 +34,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import QRCodeDesign from "@/components/web/qr-code-design";
+import SocialTrackingDialog from "@/components/web/_links/social-tracking-dialog";
 import {
   LinkPreviewComponent,
   CopyButton,
@@ -57,7 +58,7 @@ const COPY_TIMEOUT = 2000;
 const DEFAULT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "";
 
 // Types
-type DialogType = "dropdown" | "edit" | "qrCode" | "delete";
+type DialogType = "dropdown" | "edit" | "qrCode" | "tracking" | "delete";
 
 interface Creator {
   name: string | null;
@@ -269,6 +270,10 @@ export default function LinkCard({
       toggleDialog("qrCode", true);
       toggleDialog("dropdown", false);
     },
+    tracking: () => {
+      toggleDialog("tracking", true);
+      toggleDialog("dropdown", false);
+    },
     copy: async () => {
       await handleCopy();
       toggleDialog("dropdown", false);
@@ -287,6 +292,7 @@ export default function LinkCard({
   const dropdownItems: DropdownItem[] = [
     { icon: Pencil, label: "Edit", onClick: actionHandlers.edit },
     { icon: QrCode, label: "QR Code", onClick: actionHandlers.qrCode },
+    { icon: Share2, label: "Tracking", onClick: actionHandlers.tracking },
     { icon: LinkIcon, label: "Copy link", onClick: actionHandlers.copy },
     { type: "separator" },
     {
@@ -457,6 +463,13 @@ export default function LinkCard({
           </DialogContent>
         </Dialog>
       )}
+
+      <SocialTrackingDialog
+        isOpen={isDialogOpen("tracking")}
+        onOpenChange={(open) => toggleDialog("tracking", open)}
+        domain={link.domain || DEFAULT_DOMAIN}
+        slug={link.slug}
+      />
 
       {isDialogOpen("edit") && (
         <EditLinkForm

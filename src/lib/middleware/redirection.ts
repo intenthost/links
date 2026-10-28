@@ -19,6 +19,7 @@ import {
   type CachedClickAttribution,
 } from "@/lib/leads/click-cache";
 import { resolveReferer } from "@/lib/analytics/referrer";
+import { extractSocialPlatform } from "@/lib/social-platforms";
 import { getGeoData } from "@/lib/analytics/geo";
 import {
   SLUGY_ID_COOKIE,
@@ -296,12 +297,15 @@ function buildAnalyticsData(
   } catch {
     destinationHost = null;
   }
-  const referer = resolveReferer({
-    refParam,
-    headerReferer,
-    utmSource: utmParams.utm_source,
-    excludeHosts: [req.nextUrl.hostname, destinationHost],
-  });
+  const socialInfo = extractSocialPlatform(req.nextUrl.search);
+  const referer =
+    socialInfo?.domain ||
+    resolveReferer({
+      refParam,
+      headerReferer,
+      utmSource: utmParams.utm_source,
+      excludeHosts: [req.nextUrl.hostname, destinationHost],
+    });
 
   return {
     ipAddress: getIpAddress(req),
@@ -385,6 +389,9 @@ async function trackAnalytics(
     const timestamp = new Date().toISOString();
     const analytics = buildAnalyticsData(req, trigger, url);
     const utmParams = extractUTMParams(req.nextUrl.toString(), url);
+    const socialInfo = extractSocialPlatform(req.nextUrl.search);
+    const effectiveUtmSource =
+      utmParams.utm_source || (socialInfo ? socialInfo.code : undefined);
     const finalDomain = domain || DEFAULT_DOMAIN;
 
     // slugy_click_events has no `region` column — unknown columns 400 the
@@ -398,8 +405,8 @@ async function trackAnalytics(
       clickId,
       timestamp,
       ...analytics,
-      utm_source: utmParams.utm_source ?? undefined,
-      utm_medium: utmParams.utm_medium ?? undefined,
+      utm_source: effectiveUtmSource,
+      utm_medium: utmParams.utm_medium ?? (socialInfo ? "social" : undefined),
       utm_campaign: utmParams.utm_campaign ?? undefined,
       utm_term: utmParams.utm_term ?? undefined,
       utm_content: utmParams.utm_content ?? undefined,
@@ -420,8 +427,8 @@ async function trackAnalytics(
       browser: analytics.browser,
       os: analytics.os,
       referer: analytics.referer,
-      utm_source: utmParams.utm_source ?? "",
-      utm_medium: utmParams.utm_medium ?? "",
+      utm_source: effectiveUtmSource ?? "",
+      utm_medium: utmParams.utm_medium ?? (socialInfo ? "social" : ""),
       utm_campaign: utmParams.utm_campaign ?? "",
       utm_term: utmParams.utm_term ?? "",
       utm_content: utmParams.utm_content ?? "",
@@ -549,8 +556,8 @@ export async function URLRedirects(
   domain?: string,
 ): Promise<NextResponse | null> {
   try {
-    if (!shortCode?.trim()) {
-      console.warn("Empty shortCode provided to URLRedirects");
+    if (shortCode === null || shortCode === undefined) {
+      console.warn("Null/undefined shortCode provided to URLRedirects");
       return null;
     }
 
