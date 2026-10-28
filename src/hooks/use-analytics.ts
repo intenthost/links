@@ -140,7 +140,7 @@ const fetchAnalyticsData = async (
   workspaceslug: string,
   params: Record<string, string>,
   metrics?: Array<keyof AnalyticsData>,
-  useTinybird: boolean = true,
+  useTinybird: boolean = false,
   analyticsEvent: AnalyticsEvent = "clicks",
 ): Promise<Partial<AnalyticsData> & Partial<SalesAnalyticsData>> => {
   const searchParams = new URLSearchParams();
@@ -243,7 +243,7 @@ export function useAnalytics({
   searchParams = {},
   enabled = true,
   metrics = DEFAULT_METRICS,
-  useTinybird = true,
+  useTinybird = false,
   analyticsEvent = "clicks",
 }: UseAnalyticsParams) {
   const stableSearchParams = useMemo(() => {
