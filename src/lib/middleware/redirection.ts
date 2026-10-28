@@ -165,8 +165,8 @@ function attachSlugyIdCookie(response: NextResponse, clickId: string): void {
     secure: process.env.NODE_ENV === "production",
     // Localhost subdomains stay host-only; production shares across subdomains.
     ...(process.env.NODE_ENV === "production" &&
-    process.env.NEXT_PUBLIC_ROOT_DOMAIN &&
-    !process.env.NEXT_PUBLIC_ROOT_DOMAIN.includes("localhost")
+      process.env.NEXT_PUBLIC_ROOT_DOMAIN &&
+      !process.env.NEXT_PUBLIC_ROOT_DOMAIN.includes("localhost")
       ? { domain: `.${process.env.NEXT_PUBLIC_ROOT_DOMAIN.trim()}` }
       : {}),
   });
@@ -614,9 +614,9 @@ export async function URLRedirects(
         req.nextUrl.searchParams.get("preview") === "1";
       const hasPreviewMetadata = Boolean(
         linkData.title ||
-          linkData.image ||
-          linkData.metadesc ||
-          linkData.description,
+        linkData.image ||
+        linkData.metadesc ||
+        linkData.description,
       );
 
       if ((isBot || isExplicitPreviewRequest) && hasPreviewMetadata) {

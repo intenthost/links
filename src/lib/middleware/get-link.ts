@@ -76,9 +76,9 @@ const isValidSlug = (slug: string): boolean => {
   if (slug === "" || slug === "@" || slug === "_root") return true;
   return Boolean(
     slug &&
-      slug.length > 0 &&
-      slug.length <= MAX_SLUG_LENGTH &&
-      SLUG_REGEX.test(slug),
+    slug.length > 0 &&
+    slug.length <= MAX_SLUG_LENGTH &&
+    SLUG_REGEX.test(slug),
   );
 };
 
